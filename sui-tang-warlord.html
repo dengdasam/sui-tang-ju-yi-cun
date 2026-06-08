@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>隋唐聚义村</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+@font-face{font-family:'GameFont';src:local('SimHei'),local('Microsoft YaHei')}
+:root{
+  --bg:#1a0a00;--panel-bg:#2d1810;--panel-border:#5a3825;
+  --gold:#f0c040;--text:#e8d5b7;--text-dark:#8b7355;
+  --accent:#c0392b;--accent2:#27ae60;--btn-bg:#4a2c1a;--btn-hover:#6b3d24;
+  --grass:#2d5016;--cell-bg:#3a2010;
+}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Microsoft YaHei','SimHei',sans-serif;
+  font-size:13px;user-select:none;overflow:hidden;
+  height:100vh;display:flex;flex-direction:column;
+}
+#header{
+  background:linear-gradient(180deg,#3d2010,#2d1810);
+  border-bottom:2px solid #5a3825;padding:6px 12px;
+  display:flex;align-items:center;gap:12px;flex-shrink:0;
+}
+#header .title{font-size:17px;font-weight:bold;color:#f0c040;text-shadow:1px 1px 2px #000;margin-right:8px;white-space:nowrap}
+.resource{display:flex;align-items:center;gap:3px;font-size:12px;background:rgba(0,0,0,.3);padding:3px 7px;border-radius:4px;border:1px solid #4a3020}
+.resource .icon{font-size:15px}
+.resource .val{font-weight:bold;color:#f0c040}
+.resource .rate{font-size:9px;color:#8b7355;margin-left:1px}
+.header-right{margin-left:auto;display:flex;gap:6px;align-items:center}
+.header-right .season{font-size:13px;color:#e8a030;padding:3px 8px;background:rgba(0,0,0,.3);border-radius:4px}
+.header-right .day{font-size:11px;color:#8b7355}
+
+#main{display:flex;flex:1;overflow:hidden}
+#village-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#village-toolbar{display:flex;gap:3px;padding:5px 8px;background:#251510;border-bottom:1px solid #3a2518;flex-wrap:wrap;align-items:center}
+#village-toolbar button{padding:3px 8px;font-size:11px;border:1px solid #5a3825;background:var(--btn-bg);color:var(--text);border-radius:3px;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
+#village-toolbar button:hover{background:var(--btn-hover)}
+#village-toolbar button.selected{background:#8b2500;border-color:#c0392b;color:#fff}
+#village-toolbar .separator{width:1px;background:#5a3825;margin:0 3px;height:18px;align-self:center}
+#village-toolbar .mode-btn{font-weight:bold}
+#village-toolbar .mode-btn.build{border-color:#c0392b}
+#village-toolbar .mode-btn.remove{border-color:#e67e22}
+#village-toolbar .mode-btn.info{border-color:#2980b9}
+#village-toolbar .toolbar-tip{font-size:10px;color:#8b7355;margin-left:6px}
+
+#village-grid-container{flex:1;overflow:auto;padding:8px;display:flex;justify-content:center;align-items:flex-start}
+#village-grid{display:grid;gap:2px;background:#1a0d04;padding:3px;border:2px solid #3a2518;border-radius:4px}
+.grid-cell{width:50px;height:50px;background:var(--grass);border:1px solid rgba(255,255,255,.05);border-radius:2px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:21px;position:relative;transition:all .1s}
+.grid-cell:hover{filter:brightness(1.15);transform:scale(1.05);z-index:1;box-shadow:0 0 6px rgba(255,200,100,.3)}
+.grid-cell.selected{box-shadow:0 0 8px 2px rgba(255,200,50,.6);border-color:#f0c040}
+.grid-cell.invalid{background:#3a1010!important;opacity:.6}
+.grid-cell .building-icon{font-size:23px;line-height:1}
+.grid-cell .building-level{font-size:7px;color:#f0c040;position:absolute;bottom:1px;right:2px;background:rgba(0,0,0,.5);padding:0 2px;border-radius:2px}
+.grid-cell.placed-聚义厅{background:#6a3010;border-color:#f0c040!important}
+.grid-cell.placed-农舍{background:#5a3a1a}
+.grid-cell.placed-农田{background:#3a6b1e}
+.grid-cell.placed-伐木场{background:#4a3520}
+.grid-cell.placed-矿场{background:#4a3a2a}
+.grid-cell.placed-铁匠铺{background:#5a3030}
+.grid-cell.placed-军营{background:#4a3a30}
+.grid-cell.placed-马厩{background:#5a4a2a}
+.grid-cell.placed-布庄{background:#2a5070}
+.grid-cell.placed-酒肆{background:#5a4020}
+.grid-cell.placed-当铺{background:#3a3a50}
+
+#side-panel{width:290px;background:var(--panel-bg);border-left:2px solid #5a3825;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+#side-tabs{display:flex;background:#1a0d04;border-bottom:2px solid #5a3825}
+#side-tabs button{flex:1;padding:7px 2px;font-size:11px;border:none;background:transparent;color:#8b7355;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;transition:all .15s}
+#side-tabs button.active{color:#f0c040;border-bottom-color:#f0c040;background:rgba(240,192,64,.1)}
+#side-tabs button:hover{color:#d4a030}
+#side-content{flex:1;overflow-y:auto;padding:6px}
+
+.char-card{background:rgba(0,0,0,.2);border:1px solid #3a2518;border-radius:4px;padding:7px;margin-bottom:5px;display:flex;gap:7px;align-items:center;transition:all .15s}
+.char-card:hover{border-color:#5a3825;background:rgba(0,0,0,.3)}
+.char-card.recruited{border-color:#27ae60}
+.char-card .char-avatar{width:38px;height:38px;background:#4a3020;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.char-card .char-info{flex:1;min-width:0}
+.char-card .char-name{font-weight:bold;font-size:12px}
+.char-card .char-title{font-size:9px;color:#8b7355}
+.char-card .char-stats{font-size:9px;color:#aaa;margin-top:1px}
+.char-card .char-skill{font-size:9px;color:#f0c040;margin-top:1px}
+.char-card button{padding:3px 8px;font-size:10px;background:#c0392b;color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit;flex-shrink:0;white-space:nowrap}
+.char-card.recruited button.level-up{background:#27ae60}
+.char-card .assign-select{font-size:10px;padding:2px 3px;background:#3a2518;color:#e8d5b7;border:1px solid #5a3825;border-radius:3px;font-family:inherit;display:block;margin-top:3px;width:100%}
+
+.army-row{display:flex;align-items:center;gap:6px;padding:5px;background:rgba(0,0,0,.2);border-radius:4px;margin-bottom:4px}
+.army-row .army-icon{font-size:22px;width:30px;text-align:center}
+.army-row .army-info{flex:1;font-size:11px}
+.army-row .army-name{font-weight:bold}
+.army-row .army-cost{font-size:9px;color:#8b7355}
+.army-row .army-count{font-weight:bold;min-width:35px;text-align:right;color:#f0c040}
+.army-row .train-btn{padding:3px 10px;font-size:10px;background:#2980b9;color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit}
+.army-row .train-btn:hover{background:#3498db}
+.army-row .train-btn:disabled{background:#555;cursor:default}
+input[type=range]{accent-color:#f0c040}
+
+.faction-card{background:rgba(0,0,0,.2);border:1px solid #3a2518;border-radius:4px;padding:7px;margin-bottom:5px}
+.faction-card.defeated{opacity:.5;border-color:#555}
+.faction-card .faction-header{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.faction-card .faction-icon{font-size:22px}
+.faction-card .faction-name{font-weight:bold;font-size:12px}
+.faction-card .faction-power{font-size:9px;color:#e74c3c}
+.faction-card .faction-troops{font-size:9px;color:#8b7355}
+.faction-card button{width:100%;padding:5px;font-size:11px;font-weight:bold;background:#c0392b;color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit;margin-top:3px}
+.faction-card button:hover{background:#e74c3c}
+.faction-card button:disabled{background:#555;cursor:default}
+
+.tech-row{display:flex;align-items:center;gap:7px;padding:5px;background:rgba(0,0,0,.2);border-radius:4px;margin-bottom:4px}
+.tech-row .tech-icon{font-size:18px;width:28px;text-align:center}
+.tech-row .tech-info{flex:1;font-size:10px}
+.tech-row .tech-name{font-weight:bold}
+.tech-row .tech-effect{color:#8b7355;font-size:9px}
+.tech-row .tech-lv{color:#27ae60;font-size:10px}
+.tech-row button{padding:3px 7px;font-size:9px;background:#8e44ad;color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.tech-row button:hover{background:#9b59b6}
+.tech-row button:disabled{background:#555;cursor:default}
+
+#battle-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:1000}
+#battle-modal{width:680px;max-height:85vh;background:var(--panel-bg);border:2px solid #5a3825;border-radius:8px;padding:14px;overflow-y:auto}
+#battle-modal h2{text-align:center;color:#f0c040;margin-bottom:10px;font-size:17px}
+.battle-armies{display:flex;gap:16px;margin-bottom:10px}
+.battle-side{flex:1;background:rgba(0,0,0,.3);border-radius:6px;padding:8px}
+.battle-side h3{text-align:center;color:#e8d5b7;margin-bottom:6px;font-size:13px}
+.battle-side h3.ally{color:#27ae60}
+.battle-side h3.enemy{color:#e74c3c}
+.battle-unit{display:flex;align-items:center;gap:5px;padding:3px 0;font-size:11px}
+.battle-unit .unit-icon{font-size:16px}
+.battle-unit .unit-bar{flex:1;height:12px;background:#1a0a00;border-radius:6px;overflow:hidden;border:1px solid #3a2518}
+.battle-unit .unit-bar-fill{height:100%;border-radius:5px;transition:width .3s}
+.battle-unit .unit-bar-fill.ally{background:linear-gradient(90deg,#27ae60,#2ecc71)}
+.battle-unit .unit-bar-fill.enemy{background:linear-gradient(90deg,#e74c3c,#c0392b)}
+.battle-unit .unit-count{font-size:9px;color:#aaa;width:50px;text-align:right}
+.battle-log{max-height:160px;overflow-y:auto;background:rgba(0,0,0,.3);border-radius:4px;padding:7px;margin-bottom:10px;font-size:10px;line-height:1.5}
+.battle-log .log-dmg{color:#e74c3c}
+.battle-log .log-good{color:#27ae60}
+.battle-log .log-info{color:#e8a030}
+#battle-modal button.battle-btn{display:block;margin:6px auto 0;padding:7px 20px;font-size:13px;font-weight:bold;background:#c0392b;color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:inherit}
+#battle-modal button.battle-btn:hover{background:#e74c3c}
+#battle-modal .battle-result{text-align:center;font-size:18px;font-weight:bold;margin-bottom:10px}
+#battle-modal .battle-result.win{color:#27ae60}
+#battle-modal .battle-result.lose{color:#e74c3c}
+
+.notification{position:fixed;top:55px;left:50%;transform:translateX(-50%);background:#2d1810;border:1px solid #5a3825;border-radius:6px;padding:7px 14px;font-size:11px;color:#f0c040;z-index:500;animation:fadeInOut 2.5s ease forwards;pointer-events:none}
+@keyframes fadeInOut{
+  0%{opacity:0;transform:translateX(-50%) translateY(-10px)}
+  15%{opacity:1;transform:translateX(-50%) translateY(0)}
+  75%{opacity:1}
+  100%{opacity:0}
+}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:#1a0d04}
+::-webkit-scrollbar-thumb{background:#5a3825;border-radius:3px}
+
+#win-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:2000}
+#win-modal{text-align:center;background:#2d1810;border:2px solid #f0c040;border-radius:12px;padding:30px 42px}
+#win-modal h1{color:#f0c040;font-size:26px;margin-bottom:8px}
+#win-modal p{color:#e8d5b7;font-size:13px;margin-bottom:14px}
+#win-modal button{padding:9px 28px;font-size:15px;font-weight:bold;background:#c0392b;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit}
+
+/* Upgrade overlay for buildings */
+#upgrade-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:800;display:flex;align-items:center;justify-content:center}
+#upgrade-modal{background:#2d1810;border:2px solid #5a3825;border-radius:8px;padding:16px 20px;text-align:center;min-width:220px}
+#upgrade-modal h3{color:#f0c040;margin-bottom:6px}
+#upgrade-modal p{font-size:11px;color:#ccc;margin-bottom:10px}
+#upgrade-modal .btn-row{display:flex;gap:8px;justify-content:center}
+#upgrade-modal button{padding:5px 16px;font-size:11px;border:none;border-radius:3px;cursor:pointer;font-family:inherit}
+#upgrade-modal .btn-upgrade{background:#27ae60;color:#fff}
+#upgrade-modal .btn-upgrade:hover{background:#2ecc71}
+#upgrade-modal .btn-upgrade:disabled{background:#555}
+#upgrade-modal .btn-cancel{background:#555;color:#ccc}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="header">
+    <div class="title">⚔ 隋唐聚义村</div>
+    <div class="resource"><span class="icon">💰</span><span class="val">{{fmt(gold)}}</span><span class="rate">{{grow.gold>=0?'+':''}}{{grow.gold}}/日</span></div>
+    <div class="resource"><span class="icon">🌾</span><span class="val">{{fmt(food)}}</span><span class="rate">{{grow.food>=0?'+':''}}{{grow.food}}/日</span></div>
+    <div class="resource"><span class="icon">🪵</span><span class="val">{{fmt(wood)}}</span><span class="rate">+{{grow.wood}}/日</span></div>
+    <div class="resource"><span class="icon">⛏</span><span class="val">{{fmt(iron)}}</span><span class="rate">+{{grow.iron}}/日</span></div>
+    <div class="resource"><span class="icon">👥</span><span class="val">{{pop}}/{{maxPop}}</span></div>
+    <div class="header-right">
+      <div class="season">{{seasonName}}</div>
+      <div class="day">第{{day}}日</div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="village-area">
+      <div id="village-toolbar">
+        <button class="mode-btn build" :class="{selected:mode==='build'}" @click="mode='build';selBld=null">🔨 建造</button>
+        <button class="mode-btn remove" :class="{selected:mode==='remove'}" @click="mode='remove';selBld=null">💥 拆除</button>
+        <button class="mode-btn info" :class="{selected:mode==='info'}" @click="mode='info';selBld=null;upgCell=null">🔍 查看/升级</button>
+        <div class="separator"></div>
+        <template v-if="mode==='build'">
+          <button v-for="b in availBlds" :key="b.id"
+            :class="{selected:selBld===b.id}"
+            @click="selBld=selBld===b.id?null:b.id"
+            :title="b.desc">
+            {{b.icon}} {{b.name}} {{b.cost}}💰
+          </button>
+        </template>
+        <span v-if="mode==='remove'" class="toolbar-tip" style="color:#e67e22">点击建筑拆除(返还50%)</span>
+        <span v-if="mode==='info'" class="toolbar-tip" style="color:#2980b9">点击建筑查看详情或升级</span>
+      </div>
+      <div id="village-grid-container">
+        <div id="village-grid" :style="'grid-template-columns:repeat('+GC+',50px);grid-template-rows:repeat('+GR+',50px)'">
+          <div v-for="(c,i) in grid" :key="i"
+            class="grid-cell"
+            :class="[cls(c,i),{invalid:mode==='build'&&selBld&&!canPlace(i)}]"
+            @click="clickCell(i)">
+            <span v-if="c" class="building-icon">{{icons[c.id]||'❓'}}</span>
+            <span v-if="c" class="building-level">Lv{{c.level}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="side-panel">
+      <div id="side-tabs">
+        <button :class="{active:tab==='heroes'}" @click="tab='heroes'">⚔ 武将</button>
+        <button :class="{active:tab==='army'}" @click="tab='army'">🏰 兵营</button>
+        <button :class="{active:tab==='war'}" @click="tab='war'">🗺 征伐</button>
+        <button :class="{active:tab==='tech'}" @click="tab='tech'">📜 科技</button>
+      </div>
+      <div id="side-content">
+
+        <!-- 武将 -->
+        <div v-if="tab==='heroes'">
+          <div style="margin-bottom:4px;font-size:10px;color:#8b7355">武将: {{nRecruited}}/{{chars.length}} 已招募</div>
+          <div class="char-card" v-for="ch in chars" :key="ch.id" :class="{recruited:ch.recruited}">
+            <div class="char-avatar">{{ch.icon}}</div>
+            <div class="char-info">
+              <div class="char-name">{{ch.name}}</div>
+              <div class="char-title">{{ch.title}}</div>
+              <div class="char-stats">⚔{{ch.attack}} 🛡{{ch.defense}} Lv{{ch.level}}/{{ch.maxLevel}}</div>
+              <div class="char-skill">🎯 {{ch.skill}}</div>
+              <select v-if="ch.recruited" class="assign-select" @change="assignHero(ch,$event.target.value)">
+                <option value="">-- 未分配 --</option>
+                <option value="infantry">🛡 步兵阵</option>
+                <option value="archer">🏹 弓兵阵</option>
+                <option value="musket">💥 火铳阵</option>
+                <option value="cavalry">🐴 骑兵阵</option>
+                <option value="work">🔨 生产</option>
+              </select>
+            </div>
+            <div style="text-align:center">
+              <button v-if="!ch.recruited" @click="recruitHero(ch)">招募<br>{{ch.cost}}💰</button>
+              <button v-if="ch.recruited&&ch.level<ch.maxLevel" class="level-up" @click="levelUpHero(ch)">
+                升级<br>{{levelCost(ch)}}💰
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 兵营 -->
+        <div v-if="tab==='army'">
+          <div class="army-row">
+            <div class="army-icon">🛡</div><div class="army-info"><div class="army-name">步兵</div><div class="army-cost">5💰 2🌾/人</div></div>
+            <div class="army-count">{{infantry}}</div>
+            <button class="train-btn" @click="train('infantry',nTrain)">训练</button>
+          </div>
+          <div class="army-row">
+            <div class="army-icon">🏹</div><div class="army-info"><div class="army-name">弓兵</div><div class="army-cost">8💰 2🌾/人</div></div>
+            <div class="army-count">{{archers}}</div>
+            <button class="train-btn" @click="train('archer',nTrain)">训练</button>
+          </div>
+          <div class="army-row">
+            <div class="army-icon">💥</div><div class="army-info"><div class="army-name">火铳兵</div><div class="army-cost">15💰 3🌾/人 (需铁匠铺)</div></div>
+            <div class="army-count">{{muskets}}</div>
+            <button class="train-btn" @click="train('musket',nTrain)" :disabled="!hasSmith">训练</button>
+          </div>
+          <div class="army-row">
+            <div class="army-icon">🐴</div><div class="army-info"><div class="army-name">骑兵</div><div class="army-cost">20💰 5🌾/人 (需马厩)</div></div>
+            <div class="army-count">{{cavalry}}</div>
+            <button class="train-btn" @click="train('cavalry',nTrain)" :disabled="!hasStable">训练</button>
+          </div>
+          <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px">训练:</span>
+            <input type="range" min="1" max="100" v-model.number="nTrain" style="flex:1">
+            <span style="font-size:10px;min-width:25px">{{nTrain}}人</span>
+          </div>
+          <div style="margin-top:6px;font-size:9px;color:#8b7355;line-height:1.5">
+            🛡步兵→🏹弓兵 | 🏹弓兵→💥火铳 | 💥火铳→🐴骑兵 | 🐴骑兵→🛡步兵
+          </div>
+        </div>
+
+        <!-- 征伐 -->
+        <div v-if="tab==='war'">
+          <div style="margin-bottom:4px;font-size:10px">我军战力: <b style="color:#f0c040">{{armyPower}}</b></div>
+          <div v-for="f in factions" :key="f.id" class="faction-card" :class="{defeated:f.done}">
+            <div class="faction-header">
+              <div class="faction-icon">{{f.icon}}</div>
+              <div><div class="faction-name">{{f.name}}</div><div class="faction-power">🏰 战力: ~{{enemyPower(f)}}</div></div>
+            </div>
+            <div class="faction-troops">兵力: 🛡{{f.t.infantry}} 🏹{{f.t.archer}} 💥{{f.t.musket}} 🐴{{f.t.cavalry}}</div>
+            <div class="faction-troops" style="color:#f0c040">赏金: {{f.reward}}💰 | {{f.unlocks}}</div>
+            <button @click="startBattle(f)" :disabled="f.done||inBattle">
+              {{f.done?'✓ 已平定':'⚔ 出征讨伐'}}
+            </button>
+          </div>
+        </div>
+
+        <!-- 科技 -->
+        <div v-if="tab==='tech'">
+          <div class="tech-row" v-for="t in techs" :key="t.id">
+            <div class="tech-icon">{{t.icon}}</div>
+            <div class="tech-info">
+              <div class="tech-name">{{t.name}} <span class="tech-lv">Lv{{t.level}}/{{t.maxLevel}}</span></div>
+              <div class="tech-effect">{{t.desc}}</div>
+            </div>
+            <button @click="researchTech(t)" :disabled="t.level>=t.maxLevel||gold<techCost(t)">
+              研究<br>{{techCost(t)}}💰
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Battle -->
+  <div id="battle-overlay" v-if="inBattle" @click.self="closeBattle">
+    <div id="battle-modal">
+      <h2>⚔ {{btEnemy}} 之战</h2>
+      <div class="battle-armies">
+        <div class="battle-side"><h3 class="ally">🟢 我军</h3>
+          <div class="battle-unit" v-for="u in btAlly" :key="u.name">
+            <span class="unit-icon">{{u.icon}}</span>
+            <div class="unit-bar"><div class="unit-bar-fill ally" :style="{width:Math.max(1,u.hp/u.maxHp*100)+'%'}"></div></div>
+            <span class="unit-count">{{Math.floor(u.hp)}}/{{u.maxHp}}</span>
+          </div>
+        </div>
+        <div class="battle-side"><h3 class="enemy">🔴 敌军</h3>
+          <div class="battle-unit" v-for="u in btEnemyUnits" :key="u.name">
+            <span class="unit-icon">{{u.icon}}</span>
+            <div class="unit-bar"><div class="unit-bar-fill enemy" :style="{width:Math.max(1,u.hp/u.maxHp*100)+'%'}"></div></div>
+            <span class="unit-count">{{Math.floor(u.hp)}}/{{u.maxHp}}</span>
+          </div>
+        </div>
+      </div>
+      <div class="battle-log" ref="battleLogEl">
+        <div v-for="(l,i) in btLogs" :key="i" class="log-line" v-html="l"></div>
+      </div>
+      <div v-if="btResult" class="battle-result" :class="btResult">
+        {{btResult==='win'?'🎉 大获全胜！':'💀 败退而归...'}}
+      </div>
+      <button v-if="btResult" class="battle-btn" @click="closeBattle">确定</button>
+    </div>
+  </div>
+
+  <!-- Upgrade -->
+  <div id="upgrade-overlay" v-if="upgCell!=null" @click.self="upgCell=null">
+    <div id="upgrade-modal">
+      <h3>{{upgInfo.name}} Lv{{upgInfo.level}}</h3>
+      <p>{{upgInfo.desc}}</p>
+      <p v-if="upgInfo.level<upgInfo.maxLevel" style="color:#f0c040">升级费用: {{upgInfo.upgradeCost}}💰 {{upgInfo.woodCost||0}}🪵 {{upgInfo.ironCost||0}}⛏</p>
+      <p v-if="upgInfo.level>=upgInfo.maxLevel" style="color:#27ae60">已达最高等级</p>
+      <div class="btn-row">
+        <button class="btn-upgrade" @click="doUpgrade(upgCell)"
+          :disabled="upgInfo.level>=upgInfo.maxLevel||gold<upgInfo.upgradeCost||wood<(upgInfo.woodCost||0)||iron<(upgInfo.ironCost||0)">
+          升级
+        </button>
+        <button class="btn-cancel" @click="upgCell=null">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Win -->
+  <div id="win-overlay" v-if="won">
+    <div id="win-modal">
+      <h1>🏆 天下归一 🏆</h1>
+      <p>隋末群雄已平，大唐盛世即将开启！</p>
+      <p style="font-size:12px;color:#8b7355">用时 {{day}} 日，共招募 {{nRecruited}} 位名将</p>
+      <button @click="restart">重新开始</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div v-for="n in toasts" :key="n.id" class="notification">{{n.msg}}</div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script>
+const{createApp,ref,reactive,computed,nextTick,onMounted,onUnmounted}=Vue;
+
+// ====== Building Definitions ======
+const BLD={
+  聚义厅:{icon:'🏯',name:'聚义厅',cost:200,wood:50,iron:0,cat:'core',desc:'主建筑(唯⼀);每级+3建筑上限,+5人口上限',maxLv:5},
+  农舍:{icon:'🏠',name:'农舍',cost:50,wood:30,iron:0,cat:'core',desc:'+3人口上限/级',maxLv:3},
+  农田:{icon:'🌾',name:'农田',cost:30,wood:0,iron:0,cat:'farm',desc:'产粮+4/级/日',maxLv:5,out:4},
+  伐木场:{icon:'🪓',name:'伐木场',cost:40,wood:10,iron:0,cat:'res',desc:'产木+3/级/日',maxLv:5,out:3},
+  矿场:{icon:'⛏',name:'矿场',cost:60,wood:20,iron:0,cat:'res',desc:'产铁+2/级/日',maxLv:5,out:2},
+  铁匠铺:{icon:'⚒',name:'铁匠铺',cost:100,wood:30,iron:20,cat:'mil',desc:'解锁火铳兵;每级全兵种攻击+8%',maxLv:3},
+  军营:{icon:'🏰',name:'军营',cost:80,wood:40,iron:10,cat:'mil',desc:'训练费用-20%/级(最高-40%)',maxLv:3},
+  马厩:{icon:'🐴',name:'马厩',cost:120,wood:50,iron:10,cat:'mil',desc:'解锁骑兵;每级骑兵攻击+12%',maxLv:3},
+  布庄:{icon:'🧵',name:'布庄',cost:70,wood:20,iron:0,cat:'shop',desc:'产钱+5/级/日',maxLv:5,out:5},
+  酒肆:{icon:'🍶',name:'酒肆',cost:60,wood:15,iron:0,cat:'shop',desc:'产钱+4/级/日',maxLv:5,out:4},
+  当铺:{icon:'🏪',name:'当铺',cost:90,wood:25,iron:0,cat:'shop',desc:'产钱+6/级/日',maxLv:5,out:6},
+};
+
+// ====== Character Definitions ======
+const CDEFS=[
+  {id:'qin',name:'秦琼',title:'双锏名将',icon:'🔱',atk:25,def:18,skill:'骑兵统帅: 骑兵攻击+30%',cost:300,tag:'cavalry'},
+  {id:'cheng',name:'程咬金',title:'三板斧',icon:'🪓',atk:20,def:15,skill:'陷阵勇士: 步兵防御+25%',cost:200,tag:'infantry'},
+  {id:'yu',name:'尉迟恭',title:'铁鞭猛将',icon:'🔨',atk:28,def:20,skill:'夺槊陷阵: 骑兵攻击+25%',cost:400,tag:'cavalry'},
+  {id:'luo',name:'罗成',title:'银枪俏将',icon:'🗡',atk:30,def:12,skill:'回马枪: 骑兵暴击+20%',cost:350,tag:'cavalry'},
+  {id:'li',name:'李靖',title:'军神',icon:'📜',atk:15,def:22,skill:'六军镜: 全军攻击+15%',cost:500,tag:'any'},
+  {id:'xu',name:'徐茂公',title:'神机军师',icon:'🧠',atk:10,def:25,skill:'奇门遁甲: 全军防御+15%',cost:400,tag:'any'},
+  {id:'shan',name:'单雄信',title:'飞将',icon:'🐎',atk:26,def:14,skill:'马槊无双: 骑兵速度+30%',cost:350,tag:'cavalry'},
+  {id:'wang',name:'王伯当',title:'神射手',icon:'🏹',atk:22,def:10,skill:'百步穿杨: 弓兵攻击+25%',cost:250,tag:'archer'},
+  {id:'pei',name:'裴元庆',title:'银锤太保',icon:'⚡',atk:32,def:8,skill:'锤震天下: 步兵攻击+30%',cost:450,tag:'infantry'},
+  {id:'wei',name:'魏徵',title:'治世能臣',icon:'📖',atk:5,def:5,skill:'经世济民: 商铺收入+20%',cost:200,tag:'work'},
+];
+
+// ====== Faction Definitions ======
+const FDEFS=[
+  {id:'wagang',name:'瓦岗寨',icon:'🏔',pow:1,t:{infantry:200,archer:100,musket:0,cavalry:50},reward:500,unlocks:'解锁布庄'},
+  {id:'wangsc',name:'洛阳·王世充',icon:'🏯',pow:2,t:{infantry:300,archer:150,musket:50,cavalry:100},reward:800,unlocks:'解锁酒肆'},
+  {id:'doudj',name:'河北·窦建德',icon:'🏛',pow:3,t:{infantry:400,archer:200,musket:80,cavalry:150},reward:1200,unlocks:'解锁当铺'},
+  {id:'yuwen',name:'江都·宇文化及',icon:'🛡',pow:4,t:{infantry:500,archer:200,musket:150,cavalry:100},reward:1500,unlocks:'火铳兵强化Lv+2'},
+  {id:'dufw',name:'江淮·杜伏威',icon:'🌊',pow:5,t:{infantry:400,archer:300,musket:100,cavalry:200},reward:2000,unlocks:'科技上限+1'},
+  {id:'liuwz',name:'山西·刘武周',icon:'🏔',pow:6,t:{infantry:500,archer:250,musket:200,cavalry:300},reward:2500,unlocks:'军营强化'},
+  {id:'liyuan',name:'长安·李渊',icon:'👑',pow:7,t:{infantry:600,archer:400,musket:300,cavalry:400},reward:5000,unlocks:'天下归心！'},
+];
+
+// ====== Tech Definitions ======
+const TDEFS=[
+  {id:'t_inf',name:'步兵甲胄',icon:'🛡',desc:'步兵攻防+10%/级',level:0,maxLv:5,baseCost:100},
+  {id:'t_arc',name:'强弓硬弩',icon:'🏹',desc:'弓兵攻防+10%/级',level:0,maxLv:5,baseCost:100},
+  {id:'t_mus',name:'火药配方',icon:'💥',desc:'火铳兵攻防+10%/级',level:0,maxLv:5,baseCost:200},
+  {id:'t_cav',name:'骑兵战法',icon:'🐴',desc:'骑兵攻防+10%/级',level:0,maxLv:5,baseCost:150},
+  {id:'t_com',name:'商路通衢',icon:'🧵',desc:'商铺收入+15%/级',level:0,maxLv:5,baseCost:120},
+  {id:'t_farm',name:'农业改良',icon:'🌾',desc:'农田产量+20%/级',level:0,maxLv:5,baseCost:80},
+];
+
+const GC=10,GR=8,TICK=1500;
+
+createApp({setup(){
+  const gold=ref(500),food=ref(300),wood=ref(200),iron=ref(100);
+  const day=ref(1);
+  const grid=ref(new Array(GC*GR).fill(null));
+  const mode=ref('build'),selBld=ref(null),tab=ref('heroes');
+  const nTrain=ref(10);
+  const infantry=ref(0),archers=ref(0),muskets=ref(0),cavalry=ref(0);
+  const chars=ref(CDEFS.map(c=>({...c,recruited:false,level:1,assignment:null})));
+  const factions=ref(FDEFS.map(f=>({...f,t:{...f.t},done:false})));
+  const techs=ref(TDEFS.map(t=>({...t})));
+  const inBattle=ref(false),btEnemy=ref(''),btResult=ref(null);
+  const btLogs=ref([]),btAlly=ref([]),btEnemyUnits=ref([]);
+  const won=ref(false),toasts=ref([]);
+  const upgCell=ref(null);
+  const battleLogEl=ref(null);
+  let btTimer=null,gameTimer=null;
+
+  // ====== Computed ======
+  const pop=computed(()=>{let p=0;grid.value.forEach(c=>{if(c&&c.id==='农舍')p+=3*c.level});return p});
+  const maxPop=computed(()=>{const mh=grid.value.find(c=>c&&c.id==='聚义厅');return 10+(mh?mh.level*5:0)});
+  const hasSmith=computed(()=>grid.value.some(c=>c&&c.id==='铁匠铺'));
+  const hasStable=computed(()=>grid.value.some(c=>c&&c.id==='马厩'));
+  const hasBarracks=computed(()=>grid.value.some(c=>c&&c.id==='军营'));
+  const barracksLevel=computed(()=>grid.value.reduce((s,c)=>s+(c&&c.id==='军营'?c.level:0),0));
+  const mainHallLv=computed(()=>{const c=grid.value.find(x=>x&&x.id==='聚义厅');return c?c.level:0});
+  const nRecruited=computed(()=>chars.value.filter(c=>c.recruited).length);
+  const icons=computed(()=>{const m={};for(const[k,v]of Object.entries(BLD))m[k]=v.icon;return m});
+
+  // Workers assigned
+  const workers=computed(()=>chars.value.filter(c=>c.recruited&&c.assignment==='work').length);
+  // Wei Zheng check
+  const hasWeiZheng=computed(()=>!!chars.value.find(c=>c.id==='wei'&&c.recruited&&c.assignment==='work'));
+
+  // Growth rates
+  const grow=computed(()=>{
+    let gGold=0,gWood=0,gIron=0,gFood=0;
+    const ct=techs.value[4].level,ft=techs.value[5].level;
+    grid.value.forEach(c=>{
+      if(!c)return;const d=BLD[c.id];if(!d)return;
+      if(d.cat==='shop')gGold+=d.out*c.level;
+      if(d.cat==='farm')gFood+=d.out*c.level;
+      if(d.cat==='res'){
+        if(c.id==='伐木场')gWood+=d.out*c.level;
+        if(c.id==='矿场')gIron+=d.out*c.level;
+      }
+    });
+    // Commerce tech
+    gGold=Math.floor(gGold*(1+ct*0.15));
+    // Worker bonus
+    gGold+=workers.value*3;
+    if(hasWeiZheng.value)gGold=Math.floor(gGold*1.2);
+    // Farm tech
+    gFood=Math.floor(gFood*(1+ft*0.2));
+    gFood+=workers.value*2;
+    // Food consumption
+    const troopFood=Math.ceil((infantry.value+archers.value+muskets.value+cavalry.value)*0.1);
+    const popFood=pop.value;
+    const netFood=gFood-troopFood-popFood;
+    return{gold:gGold,wood:gWood,iron:gIron,food:netFood};
+  });
+
+  const seasonName=computed(()=>{const s=Math.floor((day.value-1)/90)%4;return['🌸 春','☀ 夏','🍂 秋','❄ 冬'][s]});
+
+  const availBlds=computed(()=>{
+    const arr=[];
+    arr.push(BLD['聚义厅']);arr.push(BLD['农舍']);arr.push(BLD['农田']);
+    arr.push(BLD['伐木场']);arr.push(BLD['矿场']);arr.push(BLD['军营']);
+    if(factions.value[0].done)arr.push(BLD['布庄']);
+    if(factions.value[1].done)arr.push(BLD['酒肆']);
+    if(factions.value[2].done)arr.push(BLD['当铺']);
+    if(factions.value[3].done)arr.push(BLD['铁匠铺']);
+    if(factions.value[5].done)arr.push(BLD['马厩']);
+    return arr;
+  });
+
+  const armyPower=computed(()=>{
+    const tech=[0,1,2,3].map(i=>techs.value[i].level);
+    let smithBonus=0;
+    grid.value.forEach(c=>{if(c&&c.id==='铁匠铺')smithBonus+=c.level*0.08});
+    let p=0;
+    p+=infantry.value*(1+tech[0]*0.1)*(1+smithBonus)*1;
+    p+=archers.value*(1+tech[1]*0.1)*(1+smithBonus)*1.5;
+    p+=muskets.value*(1+tech[2]*0.1)*(1+smithBonus)*3;
+    p+=cavalry.value*(1+tech[3]*0.1)*(1+smithBonus)*2.5;
+    // Li Jing bonus
+    const lj=chars.value.find(c=>c.id==='li'&&c.recruited);
+    if(lj)p=Math.floor(p*(1+lj.level*0.015));
+    // Xu Maogong bonus (defense translated to effective power)
+    const xmg=chars.value.find(c=>c.id==='xu'&&c.recruited);
+    if(xmg)p=Math.floor(p*(1+xmg.level*0.01));
+    return Math.floor(p);
+  });
+
+  // ====== Helpers ======
+  function fmt(n){const sig=n<0?'-':'';const a=Math.abs(n);if(a>=10000)return sig+(a/10000).toFixed(1)+'万';return sig+Math.floor(a).toString()}
+  function levelCost(ch){return ch.cost+ch.level*50}
+  function techCost(t){return Math.floor(t.baseCost*Math.pow(1.5,t.level))}
+  function enemyPower(f){return f.t.infantry*1+f.t.archer*1.5+f.t.musket*3+f.t.cavalry*2.5+f.pow*100}
+
+  function cls(c,i){
+    if(!c)return'';
+    return'placed-'+c.id;
+  }
+
+  // ====== Grid actions ======
+  function canPlace(idx){
+    const cell=grid.value[idx];
+    if(cell)return false;
+    if(!selBld.value)return false;
+    const d=BLD[selBld.value];
+    if(!d)return false;
+    if(gold.value<d.cost)return false;
+    if(wood.value<(d.wood||0))return false;
+    if(iron.value<(d.iron||0))return false;
+    if(d.id==='聚义厅'&&grid.value.some(c=>c&&c.id==='聚义厅'))return false;
+    const curBlds=grid.value.filter(c=>c&&c.id!=='聚义厅').length;
+    const maxBlds=5+mainHallLv.value*3;
+    if(curBlds>=maxBlds)return false;
+    return true;
+  }
+
+  function clickCell(idx){
+    const cell=grid.value[idx];
+    if(mode.value==='build'&&selBld.value&&canPlace(idx)){
+      const d=BLD[selBld.value];
+      gold.value-=d.cost;wood.value-=d.wood||0;iron.value-=d.iron||0;
+      grid.value[idx]={id:d.id,level:1};
+      toast(`建造了 ${d.name}！`);
+      selBld.value=null;
+    }else if(mode.value==='remove'&&cell){
+      if(cell.id==='聚义厅'){toast('不能拆除聚义厅！');return}
+      const d=BLD[cell.id];
+      gold.value+=Math.floor(d.cost*0.5);
+      toast(`拆除了 ${d.name}`);
+      grid.value[idx]=null;
+    }else if(mode.value==='info'&&cell){
+      upgCell.value=idx;
+    }
+  }
+
+  const upgInfo=computed(()=>{
+    if(upgCell.value===null)return{name:'',level:0,desc:'',maxLevel:0,upgradeCost:0,woodCost:0,ironCost:0};
+    const cell=grid.value[upgCell.value];
+    if(!cell)return{name:'',level:0,desc:'',maxLevel:0,upgradeCost:0,woodCost:0,ironCost:0};
+    const d=BLD[cell.id];
+    const uc=Math.floor(d.cost*(0.8+cell.level*0.3));
+    return{
+      name:d.icon+' '+d.name,level:cell.level,desc:d.desc,maxLevel:d.maxLv,
+      upgradeCost:uc,woodCost:Math.floor((d.wood||0)*(0.5+cell.level*0.2)),ironCost:Math.floor((d.iron||0)*(0.5+cell.level*0.2))
+    };
+  });
+
+  function doUpgrade(idx){
+    const cell=grid.value[idx];
+    if(!cell)return;
+    const d=BLD[cell.id];
+    if(cell.level>=d.maxLv)return;
+    const info=upgInfo.value;
+    if(gold.value<info.upgradeCost||wood.value<info.woodCost||iron.value<info.ironCost){
+      toast('资源不足！');return;
+    }
+    gold.value-=info.upgradeCost;wood.value-=info.woodCost;iron.value-=info.ironCost;
+    cell.level++;
+    toast(`${d.name} 升至 Lv${cell.level}！`);
+    upgCell.value=null;
+  }
+
+  // ====== Heroes ======
+  function recruitHero(ch){
+    if(ch.recruited)return;
+    if(gold.value<ch.cost){toast('💰 金钱不足！');return}
+    gold.value-=ch.cost;ch.recruited=true;ch.level=1;
+    toast(`${ch.name} 加入义军！`);
+  }
+
+  function levelUpHero(ch){
+    const cost=levelCost(ch);
+    if(gold.value<cost){toast('💰 金钱不足！');return}
+    if(ch.level>=ch.maxLevel){toast('已达最高等级！');return}
+    gold.value-=cost;
+    ch.level++;
+    ch.atk=Math.floor(ch.atk*1.15);
+    ch.def=Math.floor(ch.def*1.1);
+    toast(`${ch.name} 升至 Lv${ch.level}！`);
+  }
+
+  function assignHero(ch,val){ch.assignment=val||null}
+
+  // ====== Army ======
+  function train(type,amt){
+    const costs={infantry:{gold:5,food:2},archer:{gold:8,food:2},musket:{gold:15,food:3},cavalry:{gold:20,food:5}};
+    const c=costs[type];
+    const disc=hasBarracks.value?Math.max(0.6,1-barracksLevel.value*0.1):1;
+    let g=Math.floor(c.gold*amt*disc),f=c.food*amt;
+    if(gold.value<g||food.value<f){toast('资源不足！');return}
+    gold.value-=g;food.value-=f;
+    if(type==='infantry')infantry.value+=amt;
+    else if(type==='archer')archers.value+=amt;
+    else if(type==='musket')muskets.value+=amt;
+    else if(type==='cavalry')cavalry.value+=amt;
+    toast(`训练了 ${amt} 名士兵！`);
+  }
+
+  // ====== Battle ======
+  function startBattle(f){
+    if(f.done||inBattle.value)return;
+    if(infantry.value+archers.value+muskets.value+cavalry.value===0){toast('没有士兵，无法出征！');return}
+    inBattle.value=true;btEnemy.value=f.name;btResult.value=null;btLogs.value=[];
+    const st=0,at=1,mt=2,ct=3;
+    const smithLv=grid.value.filter(c=>c&&c.id==='铁匠铺').reduce((s,c)=>s+c.level,0);
+    btAlly.value=[
+      {name:'步兵',icon:'🛡',hp:infantry.value,maxHp:infantry.value,atk:(1+techs.value[st].level*0.1)*(1+smithLv*0.08),type:'inf'},
+      {name:'弓兵',icon:'🏹',hp:archers.value,maxHp:archers.value,atk:(1.5+techs.value[at].level*0.1)*(1+smithLv*0.08),type:'arc',range:!0},
+      {name:'火铳兵',icon:'💥',hp:muskets.value,maxHp:muskets.value,atk:(3+techs.value[mt].level*0.1)*(1+smithLv*0.08),type:'mus',range:!0},
+      {name:'骑兵',icon:'🐴',hp:cavalry.value,maxHp:cavalry.value,atk:(2.5+techs.value[ct].level*0.1)*(1+smithLv*0.08),type:'cav'},
+    ].filter(u=>u.hp>0);
+    btEnemyUnits.value=[
+      {name:'步兵',icon:'🛡',hp:f.t.infantry,maxHp:f.t.infantry,atk:1,type:'inf'},
+      {name:'弓兵',icon:'🏹',hp:f.t.archer,maxHp:f.t.archer,atk:1.5,type:'arc',range:!0},
+      {name:'火铳兵',icon:'💥',hp:f.t.musket,maxHp:f.t.musket,atk:3,type:'mus',range:!0},
+      {name:'骑兵',icon:'🐴',hp:f.t.cavalry,maxHp:f.t.cavalry,atk:2.5,type:'cav'},
+    ].filter(u=>u.hp>0);
+
+    bLog(`⚔ 出征 <b>${f.name}</b>！`);
+    bLog(`我军: ${sumTroops(btAlly.value)}人 | 敌军: ${sumTroops(btEnemyUnits.value)}人`);
+
+    let round=0;
+    btTimer=setInterval(()=>{
+      round++;
+      if(round>60){clearInterval(btTimer);bLog('<span class="log-info">战况胶着...双方鸣金收兵！</span>');btResult.value='lose';return}
+      // Compute powers
+      const ap=btAlly.value.reduce((s,u)=>s+u.hp*u.atk,0);
+      const ep=btEnemyUnits.value.reduce((s,u)=>s+u.hp*u.atk,0);
+      if(ap<=0){clearInterval(btTimer);bLog('<span class="log-dmg">💀 我军全军覆没！</span>');btResult.value='lose';return}
+      if(ep<=0){clearInterval(btTimer);bLog('<span class="log-good">🎉 敌军溃败！大获全胜！</span>');btResult.value='win';
+        gold.value+=f.reward;f.done=true;
+        toast(`平定 ${f.name}！+${f.reward}💰 ${f.unlocks}`);
+        // Special unlocks
+        if(f.id==='yuwen'){
+          // 火铳 tech +2
+          const mt=techs.value[2];
+          mt.level=Math.min(mt.maxLv,mt.level+2);
+        }
+        if(f.id==='dufw'){
+          techs.value.forEach(t=>{if(t.maxLv<5)t.maxLv=Math.min(5,t.maxLv+1)});
+        }
+        if(f.id==='liuwz'){
+          // Barracks max level +1
+          if(BLD['军营'].maxLv<4)BLD['军营'].maxLv++;
+        }
+        if(factions.value.every(x=>x.done))setTimeout(()=>{won.value=true},800);
+        return}
+      bLog(`第${round}回合 | 我军战力:${Math.floor(ap)} 敌军战力:${Math.floor(ep)}`);
+      // Damage
+      distDmg(btAlly.value,ep*0.18);
+      distDmg(btEnemyUnits.value,ap*0.18);
+      btAlly.value=btAlly.value.map(u=>({...u,hp:Math.max(0,u.hp)})).filter(u=>u.hp>0);
+      btEnemyUnits.value=btEnemyUnits.value.map(u=>({...u,hp:Math.max(0,u.hp)})).filter(u=>u.hp>0);
+    },350);
+  }
+
+  function sumTroops(u){return Math.floor(u.reduce((s,x)=>s+x.hp,0))}
+  function distDmg(units,dmg){
+    if(units.length===0)return;
+    const total=units.reduce((s,u)=>s+u.hp,0);
+    units.forEach(u=>{
+      const share=total>0?(u.hp/total)*dmg:dmg/units.length;
+      u.hp-=share*(0.8+Math.random()*0.4);
+    });
+  }
+  function bLog(m){btLogs.value.push(m);if(btLogs.value.length>60)btLogs.value.shift();
+    nextTick(()=>{const el=document.querySelector('.battle-log');if(el)el.scrollTop=el.scrollHeight})}
+  function closeBattle(){clearInterval(btTimer);inBattle.value=false;btResult.value=null;btLogs.value=[]}
+
+  // ====== Tech ======
+  function researchTech(t){
+    if(t.level>=t.maxLv)return;
+    const cost=techCost(t);
+    if(gold.value<cost){toast('💰 金钱不足！');return}
+    gold.value-=cost;t.level++;
+    toast(`${t.name} 研究完成 Lv${t.level}！`);
+  }
+
+  // ====== Misc ======
+  function toast(msg){const id=Date.now();toasts.value.push({id,msg});setTimeout(()=>{toasts.value=toasts.value.filter(n=>n.id!==id)},2500)}
+  function restart(){
+    gold.value=500;food.value=300;wood.value=200;iron.value=100;day.value=1;
+    grid.value=new Array(GC*GR).fill(null);
+    infantry.value=0;archers.value=0;muskets.value=0;cavalry.value=0;
+    chars.value=CDEFS.map(c=>({...c,recruited:false,level:1,assignment:null}));
+    factions.value=FDEFS.map(f=>({...f,t:{...f.t},done:false}));
+    techs.value=TDEFS.map(t=>({...t}));
+    won.value=false;inBattle.value=false;selBld.value=null;upgCell.value=null;
+    toast('🏁 新的征程开始！');
+  }
+
+  // ====== Game Loop ======
+  function tick(){
+    day.value++;
+    gold.value+=grow.value.gold;
+    wood.value+=grow.value.wood;
+    iron.value+=grow.value.iron;
+    food.value=Math.max(0,food.value+grow.value.food);
+    // Warn on starvation
+    if(food.value<=0&&pop.value>0&&day.value%5===0)toast('⚠ 粮草耗尽！村民在挨饿...');
+  }
+
+  onMounted(()=>{gameTimer=setInterval(tick,TICK)});
+  onUnmounted(()=>{clearInterval(gameTimer);clearInterval(btTimer)});
+
+  return{
+    gold,food,wood,iron,day,grid,GC,GR,
+    mode,selBld,tab,nTrain,
+    infantry,archers,muskets,cavalry,
+    chars,factions,techs,
+    inBattle,btEnemy,btResult,btLogs,btAlly,btEnemyUnits,
+    won,toasts,upgCell,battleLogEl,
+    pop,maxPop,hasSmith,hasStable,hasBarracks,mainHallLv,
+    nRecruited,icons,grow,seasonName,availBlds,armyPower,upgInfo,
+    fmt,levelCost,techCost,enemyPower,cls,canPlace,clickCell,
+    recruitHero,levelUpHero,assignHero,
+    train,startBattle,closeBattle,researchTech,doUpgrade,
+    restart,toast,
+  };
+}}).mount('#app');
+</script>
+</body>
+</html>
