@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>隋唐聚义村</title>
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<style>
+:root {
+  --bg: #1a1410;
+  --panel-bg: #231a12;
+  --border: #4a3828;
+  --gold: #c9a55c;
+  --gold-dim: #7a6238;
+  --text: #d4c5a9;
+  --text-dim: #8a7a65;
+  --text-bright: #f0e6d2;
+  --red: #c0392b;
+  --red-bright: #e74c3c;
+  --green: #27ae60;
+  --green-bright: #2ecc71;
+  --blue: #2980b9;
+  --blue-dim: #1a5276;
+  --orange: #d35400;
+  --purple: #8e44ad;
+  --accent: #e67e22;
+  --font-main: 'SimSun', 'STSong', 'Noto Serif CJK SC', serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-main);
+  font-size: 15px;
+  line-height: 1.7;
+}
+#app { height:100vh; display:flex; flex-direction:column; }
+
+/* 标题画面 */
+.title-screen {
+  position: fixed; inset:0; z-index:100;
+  background: radial-gradient(ellipse at center, #2c1f14 0%, #0d0a06 70%);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.title-screen .ornament { color:var(--gold-dim); font-size:24px; letter-spacing:12px; margin-bottom:8px; }
+.title-screen h1 { font-size:52px; color:var(--gold); text-shadow:0 0 30px rgba(201,165,92,0.4); letter-spacing:12px; margin:16px 0; }
+.title-screen .subtitle { color:var(--text-dim); font-size:16px; letter-spacing:8px; margin-bottom:48px; }
+.title-screen .btn {
+  display:block; width:220px; margin:8px auto; padding:12px 0;
+  border:1px solid var(--border); background:var(--panel-bg);
+  color:var(--gold); font-family:var(--font-main); font-size:18px;
+  cursor:pointer; transition:all .2s; text-align:center;
+}
+.title-screen .btn:hover { background:var(--border); color:var(--text-bright); border-color:var(--gold); }
+.title-screen .version { color:var(--text-dim); font-size:12px; margin-top:32px; }
+
+/* 游戏主界面 */
+.game-screen { flex:1; display:flex; flex-direction:column; }
+
+/* 状态栏 */
+.status-bar {
+  display:flex; align-items:center; gap:24px; padding:6px 16px;
+  background:var(--panel-bg); border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.status-bar .item { display:flex; align-items:center; gap:5px; font-size:14px; }
+.status-bar .item .icon { font-size:16px; }
+.status-bar .item .val { color:var(--text-bright); font-weight:bold; min-width:36px; }
+.status-bar .item .label { color:var(--text-dim); font-size:12px; }
+.status-bar .date { margin-left:auto; color:var(--gold-dim); font-size:13px; }
+.status-bar .season { color:var(--accent); font-size:12px; margin-left:4px; }
+
+/* 主内容区 */
+.main-content { flex:1; display:flex; overflow:hidden; }
+
+/* 故事面板 */
+.story-panel {
+  width:420px; flex-shrink:0; display:flex; flex-direction:column;
+  border-right:1px solid var(--border); background:var(--panel-bg);
+}
+.story-panel .header {
+  padding:8px 16px; border-bottom:1px solid var(--border);
+  color:var(--gold); font-size:14px; letter-spacing:2px;
+}
+.story-panel .body {
+  flex:1; overflow-y:auto; padding:12px 16px;
+  scrollbar-width:thin; scrollbar-color:var(--border) var(--bg);
+}
+.story-panel .body::-webkit-scrollbar { width:4px; }
+.story-panel .body::-webkit-scrollbar-track { background:var(--bg); }
+.story-panel .body::-webkit-scrollbar-thumb { background:var(--border); }
+.story-line { padding:4px 0; }
+.story-line.player { color:var(--blue); }
+.story-line.npc { color:var(--green); }
+.story-line.system { color:var(--text-dim); font-style:italic; }
+.story-line.narrate { color:var(--text); }
+.story-line.warning { color:var(--red-bright); }
+.story-line.reward { color:var(--gold); }
+
+/* 输入区 */
+.input-area { padding:8px 16px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:4px; }
+.input-row { display:flex; gap:8px; align-items:center; }
+.input-row .prompt { color:var(--gold); white-space:nowrap; font-size:14px; }
+.input-row input {
+  flex:1; background:var(--bg); border:1px solid var(--border);
+  color:var(--text-bright); font-family:var(--font-main); font-size:14px;
+  padding:6px 10px;
+}
+.input-row input:focus { outline:none; border-color:var(--gold); }
+.options { display:flex; flex-wrap:wrap; gap:6px; padding:4px 0; }
+.option-btn {
+  padding:6px 14px; background:var(--bg); border:1px solid var(--border);
+  color:var(--text); font-family:var(--font-main); font-size:14px;
+  cursor:pointer; transition:all .15s;
+}
+.option-btn:hover { border-color:var(--gold); color:var(--gold); background:#2a1f14; }
+.option-btn.primary { border-color:var(--gold-dim); color:var(--gold); }
+.option-btn.danger { border-color:var(--red); color:var(--red-bright); }
+.option-btn.danger:hover { background:#3a1515; }
+
+/* 右侧面板区 */
+.right-panels { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.nav-tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--panel-bg); overflow-x:auto; }
+.nav-tab {
+  padding:8px 16px; border-right:1px solid var(--border); cursor:pointer;
+  color:var(--text-dim); font-size:14px; white-space:nowrap; transition:all .15s;
+}
+.nav-tab:hover { color:var(--text); }
+.nav-tab.active { color:var(--gold); background:var(--bg); border-bottom:2px solid var(--gold); }
+.panel-content { flex:1; overflow-y:auto; padding:12px 16px; }
+
+.card { background:var(--panel-bg); border:1px solid var(--border); padding:10px 14px; margin-bottom:8px; }
+.card .name { color:var(--text-bright); font-size:15px; font-weight:bold; }
+.card .desc { color:var(--text-dim); font-size:13px; margin-top:2px; }
+.card .stats { display:flex; gap:16px; margin-top:6px; font-size:13px; color:var(--text); }
+.card .actions { margin-top:8px; display:flex; gap:6px; }
+.btn-sm {
+  padding:4px 10px; font-size:13px; font-family:var(--font-main);
+  background:var(--bg); border:1px solid var(--border);
+  color:var(--text); cursor:pointer; transition:all .15s;
+}
+.btn-sm:hover { border-color:var(--gold); color:var(--gold); }
+.btn-sm.gold { border-color:var(--gold-dim); color:var(--gold); }
+empty-state { color:var(--text-dim); text-align:center; padding:40px 20px; font-size:14px; }
+
+/* 弹窗 */
+.modal-backdrop {
+  position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:200;
+  display:flex; align-items:center; justify-content:center;
+}
+.modal { background:var(--panel-bg); border:1px solid var(--border); min-width:360px; max-width:500px; }
+.modal .modal-header { padding:10px 16px; border-bottom:1px solid var(--border); color:var(--gold); font-size:16px; }
+.modal .modal-body { padding:16px; max-height:60vh; overflow-y:auto; }
+.modal .modal-footer { padding:10px 16px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; }
+
+/* 战斗 */
+.combat-hud { display:flex; gap:20px; padding:10px; background:var(--bg); border:1px solid var(--border); margin-bottom:12px; }
+.combat-side { flex:1; }
+.combat-side .side-name { font-size:15px; color:var(--gold); margin-bottom:4px; }
+.combat-side .hp-bar { height:8px; background:#2a1a1a; border-radius:4px; overflow:hidden; margin-bottom:8px; }
+.combat-side .hp-fill { height:100%; background:var(--red-bright); transition:width .5s; }
+.combat-side.ally .hp-fill { background:var(--green-bright); }
+.combat-side .troop-info { font-size:12px; color:var(--text-dim); }
+.formation-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px; }
+.formation-card { background:var(--panel-bg); border:1px solid var(--border); padding:8px; cursor:pointer; transition:all .15s; font-size:13px; }
+.formation-card:hover { border-color:var(--gold); }
+.formation-card.selected { border-color:var(--gold); background:#2a1f14; }
+.formation-card .fm-name { color:var(--gold); font-weight:bold; }
+.formation-card .fm-desc { color:var(--text-dim); font-size:12px; }
+.formation-card .fm-effect { color:var(--accent); font-size:11px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 标题画面 -->
+  <div v-if="!gameStarted" class="title-screen">
+    <div class="ornament">◆ ◇ ◆</div>
+    <h1>隋唐聚义村</h1>
+    <div class="subtitle">大业七年 · 乱世风云</div>
+    <button class="btn" @click="startGame('normal')">初出茅庐</button>
+    <button class="btn" @click="startGame('hard')">乱世英雄</button>
+    <button class="btn" @click="startGame('hell')">地狱模式</button>
+    <button v-if="hasSave" class="btn" @click="loadGame">继续游戏</button>
+    <div class="version">v0.5 · 修复版</div>
+  </div>
+
+  <!-- 游戏界面 -->
+  <div v-else class="game-screen">
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <div class="item"><span class="icon">钱币</span><span class="val">{{ fmt(state.gold) }}</span></div>
+      <div class="item"><span class="icon">粮食</span><span class="val">{{ fmt(state.food) }}</span></div>
+      <div class="item"><span class="icon">木材</span><span class="val">{{ fmt(state.wood) }}</span></div>
+      <div class="item"><span class="icon">铁矿</span><span class="val">{{ fmt(state.iron) }}</span></div>
+      <div class="item"><span class="icon">人口</span><span class="val">{{ state.population }}</span></div>
+      <div class="item"><span class="icon">威望</span><span class="val">{{ state.prestige }}</span></div>
+      <div class="date">第{{ state.day }}日 · 第{{ state.year }}年 {{ seasonName }}</div>
+      <div class="season">{{ weatherIcon }} {{ weatherName }}</div>
+    </div>
+
+    <!-- 主内容 -->
+    <div class="main-content">
+      <!-- 故事面板 -->
+      <div class="story-panel">
+        <div class="header">聚义纪事</div>
+        <div class="body" ref="storyBody">
+          <div v-for="(line, i) in state.story" :key="i" :class="'story-line ' + line.type">
+            {{ line.text }}
+          </div>
+          <div v-if="state.story.length === 0" style="color:var(--text-dim);text-align:center;padding:40px 20px;">等待故事展开</div>
+        </div>
+        <div class="input-area">
+          <div v-if="state.options.length > 0" class="options">
+            <button v-for="(opt, i) in state.options" :key="i"
+              :class="['option-btn', opt.style || '']"
+              @click="chooseOption(i)">
+              {{ i+1 }}. {{ opt.text }}
+            </button>
+          </div>
+          <div v-else class="input-row">
+            <span class="prompt">></span>
+            <input v-model="inputCmd" @keyup.enter="processInput" placeholder="输入指令...">
+          </div>
+        </div>
+      </div>
+
+      <!-- 面板区 -->
+      <div class="right-panels">
+        <div class="nav-tabs">
+          <div v-for="tab in tabs" :key="tab.id"
+            :class="['nav-tab', { active: activeTab === tab.id }]"
+            @click="activeTab = tab.id">
+            {{ tab.icon }} {{ tab.label }}
+          </div>
+        </div>
+        <div class="panel-content">
+          <!-- 山寨面板 -->
+          <div v-if="activeTab === 'village'">
+            <div style="font-size:18px;color:var(--gold);margin-bottom:12px;">屯兵寨</div>
+            <div style="color:var(--text-dim);font-size:14px;margin-bottom:16px;">已建 {{ state.buildings.length }} 种建筑</div>
+            <div v-for="b in state.buildings" :key="b.id" class="card">
+              <div class="name">{{ b.name }} <span style="color:var(--gold-dim)">Lv.{{ b.level }}</span></div>
+              <div class="desc">产出：{{ getBldOutput(b) }} | {{ b.assignedHero ? '武将已分配' : '空闲' }}</div>
+              <div style="height:6px;background:var(--bg);border-radius:3px;margin-top:4px;overflow:hidden;"><div style="height:100%;background:var(--gold);border-radius:3px;transition:width .3s;" :style="{width: (b.level/5*100)+'%'}"></div></div>
+            </div>
+            <button class="btn-sm gold" @click="advanceDay" style="margin-top:16px;width:100%;padding:10px;">推进一日</button>
+          </div>
+
+          <!-- 建造面板 -->
+          <div v-if="activeTab === 'build'">
+            <div style="font-size:18px;color:var(--gold);margin-bottom:12px;">建造</div>
+            <div v-for="b in availableBuildings" :key="b.id" class="card">
+              <div class="name">{{ b.name }} <span style="color:var(--text-dim);font-size:12px;">{{ b.category }}</span></div>
+              <div class="desc">{{ b.description }}</div>
+              <div class="stats">
+                <span>金币{{ b.costGold }}</span>
+                <span v-if="b.costWood">木材{{ b.costWood }}</span>
+              </div>
+              <div class="actions">
+                <button class="btn-sm gold" @click="buildIt(b.id)" :disabled="!canBuild(b)">建造</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 武将面板 -->
+          <div v-if="activeTab === 'heroes'">
+            <div style="font-size:18px;color:var(--gold);margin-bottom:12px;">武将</div>
+            <div v-for="h in state.heroes" :key="h.id" class="card" @click="selectedHero = h.id" style="cursor:pointer;">
+              <div class="name">{{ h.name }} · {{ h.title }} <span style="color:var(--gold-dim)">Lv.{{ h.level||1 }}</span></div>
+              <div class="desc">{{ h.desc }}</div>
+              <div class="stats">
+                <span>攻{{ h.atk }}</span><span>防{{ h.def }}</span><span>智{{ h.int }}</span>
+              </div>
+              <div class="actions">
+                <button class="btn-sm" @click.stop="heroAssign(h.id)">分配</button>
+                <button class="btn-sm" @click.stop="heroTalk(h.id)">交谈</button>
+                <button class="btn-sm gold" @click.stop="heroGift(h.id)">送礼</button>
+              </div>
+            </div>
+            <div style="color:var(--gold-dim);font-size:13px;margin:12px 0 8px;">可招募：</div>
+            <div v-for="h in recruitableHeroes" :key="h.id" class="card">
+              <div class="name">{{ h.name }} · {{ h.title }}</div>
+              <div class="desc">{{ h.desc }}</div>
+              <div class="stats">
+                <span>金币{{ h.costGold }}</span>
+                <span>威望{{ h.costPrestige }}</span>
+              </div>
+              <div class="actions">
+                <button class="btn-sm gold" @click="recruitHero(h.id)" :disabled="!canRecruit(h)">招募</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 军事面板 -->
+          <div v-if="activeTab === 'military'">
+            <div style="font-size:18px;color:var(--gold);margin-bottom:12px;">军事</div>
+            <div v-for="(tdef, tkey) in TROOP_TYPES" :key="tkey" class="card">
+              <div class="name">{{ tdef.icon }} {{ tdef.name }} <span style="color:var(--gold-dim)">现有 {{ state.troops[tkey] }} 人</span></div>
+              <div class="desc">{{ tdef.desc }}</div>
+              <div class="stats">
+                <span>金币{{ tdef.costGold }}/人</span>
+                <span>粮食{{ tdef.costFood }}/人</span>
+              </div>
+              <div class="actions">
+                <input v-model.number="trainCount[tkey]" type="number" min="1" max="100" style="width:60px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:3px 6px;font-family:var(--font-main);">
+                <button class="btn-sm gold" @click="trainTroops(tkey)">训练</button>
+              </div>
+            </div>
+            <div style="margin-top:24px;">
+              <div style="font-size:16px;color:var(--gold);margin-bottom:8px;">出征讨伐</div>
+              <div v-if="!combatActive">
+                <div v-for="en in ENEMIES" :key="en.id" class="card">
+                  <div class="name">{{ en.name }}</div>
+                  <div class="desc">{{ en.desc }}</div>
+                  <div class="stats">
+                    <span>攻{{ en.atk }}</span><span>防{{ en.def }}</span><span>HP{{ en.hp }}</span>
+                  </div>
+                  <div class="actions">
+                    <button class="btn-sm danger" @click="initCombat(en.id)" :disabled="totalTroops < 5">出征</button>
+                  </div>
+                </div>
+              </div>
+              <div v-if="combatActive">
+                <div style="padding:10px;background:var(--bg);border:1px solid var(--border);margin-bottom:12px;">
+                  <div style="font-size:15px;color:var(--gold);">战斗进行中</div>
+                  <div style="font-size:13px;color:var(--text-dim);margin-top:4px;">回合 {{ combatRound }}</div>
+                  <button class="btn-sm gold" @click="doCombatRound" style="margin-top:8px;width:100%;padding:8px;">下一回合</button>
+                </div>
+                <div v-if="combatPhase === 'result'" style="margin-bottom:12px;">
+                  <div :style="{color:combatWin?'var(--green-bright)':'var(--red-bright)',fontSize:'16px',fontWeight:'bold'}">
+                    {{ combatWin ? '大获全胜！' : '兵败如山...' }}
+                  </div>
+                  <div style="color:var(--text-dim);font-size:13px;margin-top:8px;">{{ combatResultText }}</div>
+                  <button class="btn-sm" @click="endCombat" style="margin-top:8px;">确认</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 科技面板 -->
+          <div v-if="activeTab === 'tech'">
+            <div style="font-size:18px;color:var(--gold);margin-bottom:12px;">科技</div>
+            <div v-for="t in TECH_DEFS" :key="t.id" class="card">
+              <div class="name">{{ t.icon }} {{ t.name }}
+                <span style="color:var(--gold-dim);font-size:12px;">
+                  Lv.{{ state.tech[t.id]||0 }} / {{ t.maxLvl }}
+                </span>
+              </div>
+              <div class="desc">{{ t.desc }}</div>
+              <div class="actions">
+                <button v-if="(state.tech[t.id]||0) < t.maxLvl" class="btn-sm gold"
+                  @click="researchTech(t.id)" :disabled="!canResearch(t)">研究</button>
+                <span v-else style="color:var(--gold-dim);">已满级</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 系统面板 -->
+          <div v-if="activeTab === 'system'">
+            <div style="font-size:18px;color:var(--gold);margin-bottom:12px;">系统</div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
+              <button class="btn-sm" @click="saveGame" style="padding:10px;">存档</button>
+              <button class="btn-sm" @click="showLoadDialog = true" style="padding:10px;">读档</button>
+              <button class="btn-sm danger" @click="confirmQuit" style="padding:10px;">返回标题</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 确认弹窗 -->
+  <div v-if="showConfirm" class="modal-backdrop" @click.self="showConfirm=false">
+    <div class="modal">
+      <div class="modal-header">{{ confirmTitle }}</div>
+      <div class="modal-body">{{ confirmText }}</div>
+      <div class="modal-footer">
+        <button class="btn-sm" @click="showConfirm=false">取消</button>
+        <button class="btn-sm danger" @click="doConfirm">确认</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, nextTick, toRefs } = Vue
+
+// ===== 数据定义 =====
+const BUILDING_DEFS = [
+  { id:'farm', name:'农田', category:'生产', description:'种植粮食，是寨子的命脉', costGold:100, costWood:50, output:'粮食 +30/日', outputRes:'food', outputBase:30 },
+  { id:'lumber', name:'伐木场', category:'生产', description:'砍伐木材，建设基础', costGold:100, costWood:0, output:'木材 +15/日', outputRes:'wood', outputBase:15 },
+  { id:'mine', name:'矿场', category:'生产', description:'开采铁矿，打造兵器', costGold:200, costWood:100, output:'铁矿 +10/日', outputRes:'iron', outputBase:10 },
+  { id:'house', name:'农舍', category:'居住', description:'提供住所，增加人口上限', costGold:150, costWood:100, output:'人口上限 +10', outputRes:'population', outputBase:10 },
+  { id:'barracks', name:'军营', category:'军事', description:'训练士兵，组建军队', costGold:300, costWood:150, output:'可训练步兵', outputRes:'troops', outputBase:0 },
+]
+
+// ===== 武将数据 =====
+const HERO_DEFS = [
+  { id:'qinqiong', name:'秦琼', rank:'SSS', title:'门神', desc:'字叔宝，隋唐第一猛将。忠义无双，勇冠三军。',
+    atk:92, def:85, int:72, pol:65, chm:85, costGold:1500, costPrestige:200, growth:{atk:2.5,def:2,int:1.5,pol:1,chm:1.5},
+    skill:'门神守护', skillDesc:'全军防御+20%持续3回合', favorite:'名剑' },
+  { id:'lichengjing', name:'李靖', rank:'SSS', title:'军神', desc:'字药师，用兵如神，兵法大家。',
+    atk:78, def:88, int:95, pol:88, chm:80, costGold:1800, costPrestige:250, growth:{atk:1,def:1.5,int:3,pol:2,chm:1},
+    skill:'军神韬略', skillDesc:'预知敌方1回合行动，全军全属性+10%', favorite:'兵书' },
+  { id:'xuerengui', name:'薛仁贵', rank:'SSS', title:'白虎星', desc:'名将之后，箭术无双。',
+    atk:95, def:78, int:82, pol:70, chm:88, costGold:2000, costPrestige:300, growth:{atk:3,def:1.5,int:1.5,pol:1,chm:1.5},
+    skill:'三箭定天山', skillDesc:'远程攻击伤害+50%，必定暴击', favorite:'宝弓' },
+  { id:'chengyaojin', name:'程咬金', rank:'SS', title:'混世魔王', desc:'三板斧打天下，豪爽仗义。',
+    atk:88, def:82, int:40, pol:35, chm:78, costGold:800, costPrestige:80, growth:{atk:2,def:2,int:0.5,pol:0.5,chm:1},
+    skill:'三板斧', skillDesc:'对单体造成250%伤害', favorite:'美酒' },
+  { id:'weichigong', name:'尉迟恭', rank:'SS', title:'黑煞神', desc:'铁匠出身，力大无穷。',
+    atk:90, def:88, int:45, pol:40, chm:65, costGold:900, costPrestige:90, growth:{atk:2.5,def:2.5,int:0.5,pol:0.5,chm:0.5},
+    skill:'黑煞破阵', skillDesc:'对敌方前排造成150%伤害并降低防御10%', favorite:'良马' },
+  { id:'luocheng', name:'罗成', rank:'SS', title:'冷面寒枪', desc:'白马银枪，少年英雄。',
+    atk:91, def:72, int:75, pol:55, chm:82, costGold:1000, costPrestige:100, growth:{atk:2.5,def:1,int:1.5,pol:1,chm:1.5},
+    skill:'回马枪', skillDesc:'反击伤害+100%，每回合可反击一次', favorite:'银枪' },
+  { id:'peiyuanqing', name:'裴元庆', rank:'S', title:'银锤太保', desc:'少年猛将，银锤震天下。',
+    atk:94, def:70, int:38, pol:30, chm:75, costGold:700, costPrestige:70, growth:{atk:2.5,def:1.5,int:0.3,pol:0.3,chm:1},
+    skill:'银锤震天', skillDesc:'攻击+40%，但防御-20%持续2回合', favorite:'铁锤' },
+  { id:'xumaojun', name:'徐茂公', rank:'S', title:'神机军师', desc:'运筹帷幄，神机妙算。',
+    atk:50, def:62, int:90, pol:75, chm:70, costGold:600, costPrestige:80, growth:{atk:0.3,def:0.5,int:2.5,pol:2,chm:1},
+    skill:'神机妙算', skillDesc:'下一回合我方先手，+20%暴击率', favorite:'棋盘' },
+  { id:'lijin', name:'李勣', rank:'S', title:'英国公', desc:'文武双全。治国安邦，征战四方。',
+    atk:75, def:78, int:85, pol:90, chm:75, costGold:800, costPrestige:100, growth:{atk:1,def:1,int:2,pol:3,chm:1},
+    skill:'文武兼资', skillDesc:'资源消耗-20%持续3回合', favorite:'策论' },
+  { id:'weizheng', name:'魏徵', rank:'S', title:'谏议大夫', desc:'直言敢谏，以人为镜。',
+    atk:35, def:50, int:88, pol:95, chm:60, costGold:500, costPrestige:80, growth:{atk:0.2,def:0.3,int:2,pol:3,chm:0.5},
+    skill:'兼听则明', skillDesc:'政策实施成功率+30%，民心+5', favorite:'史书' },
+  { id:'houjunji', name:'侯君集', rank:'A', title:'陈国公', desc:'精于计算，擅长后勤。',
+    atk:65, def:60, int:78, pol:72, chm:55, costGold:400, costPrestige:40, growth:{atk:1,def:1,int:1.5,pol:1.5,chm:0.5},
+    skill:'后勤保障', skillDesc:'粮食消耗-30%持续5日', favorite:'算盘' },
+  { id:'wangbodang', name:'王伯当', rank:'A', title:'勇三郎', desc:'忠肝义胆，箭术精湛。',
+    atk:72, def:65, int:62, pol:50, chm:68, costGold:350, costPrestige:30, growth:{atk:1.5,def:1,int:1,pol:0.5,chm:1},
+    skill:'穿杨箭', skillDesc:'对单体远程目标造成180%伤害', favorite:'弓箭' },
+  { id:'shanxiongxin', name:'单雄信', rank:'A', title:'飞将', desc:'绿林出身，马上功夫一流。',
+    atk:78, def:70, int:45, pol:40, chm:65, costGold:400, costPrestige:35, growth:{atk:2,def:1.5,int:0.5,pol:0.5,chm:1},
+    skill:'飞马突袭', skillDesc:'骑兵冲锋伤害+30%', favorite:'战马' },
+  { id:'qinshuba', name:'秦叔宝', rank:'A', title:'少年英杰', desc:'少年秦琼，才华初显。',
+    atk:65, def:55, int:55, pol:45, chm:75, costGold:300, costPrestige:20, growth:{atk:3,def:2.5,int:2,pol:1.5,chm:2},
+    skill:'少年意气', skillDesc:'经验获取+50%', favorite:'名剑' },
+]
+
+// ===== 军事数据 =====
+const TROOP_TYPES = {
+  infantry: { name:'步兵', icon:'刀', costGold:5, costFood:3, atk:10, def:8, hp:20, desc:'基础步兵，攻守平衡' },
+  archers: { name:'弓兵', icon:'弓', costGold:8, costFood:2, atk:12, def:4, hp:15, desc:'远程攻击，克制步兵' },
+  cavalry: { name:'骑兵', icon:'马', costGold:15, costFood:5, atk:16, def:6, hp:22, desc:'冲锋陷阵，克制弓兵' },
+  musketeers: { name:'火铳兵', icon:'铳', costGold:20, costFood:3, atk:20, def:3, hp:12, desc:'火力凶猛，克制骑兵' },
+}
+const COUNTER_MAP = { infantry:'archers', archers:'cavalry', cavalry:'musketeers', musketeers:'infantry' }
+const ENEMIES = [
+  { id:'bandits', name:'山贼', desc:'一群占山为王的强盗', atk:6, def:4, hp:80, count:15, reward:'金币200 粮食100', type:'infantry' },
+  { id:'raiders', name:'流寇', desc:'四处流窜的溃兵匪徒', atk:8, def:5, hp:100, count:20, reward:'金币350 粮食150', type:'infantry' },
+  { id:'wolves', name:'狼群', desc:'山中的野狼，饥肠辘辘', atk:10, def:3, hp:60, count:12, reward:'金币150 粮食80', type:'cavalry' },
+  { id:'wagang', name:'瓦岗巡逻队', desc:'瓦岗寨的巡逻兵', atk:12, def:7, hp:120, count:25, reward:'金币500 粮食200', type:'infantry' },
+  { id:'sui', name:'隋军溃兵', desc:'溃散的隋朝残兵', atk:10, def:6, hp:100, count:30, reward:'金币400 粮食250', type:'archers' },
+]
+
+// ===== 科技数据 =====
+const TECH_DEFS = [
+  { id:'agriculture', name:'农耕技术', icon:'粮食', desc:'提升粮食产量', maxLvl:5, costBase:{gold:200,wood:50,iron:0}, incrFactor:1.8 },
+  { id:'military', name:'军事训练', icon:'军事', desc:'提升军队战斗力', maxLvl:5, costBase:{gold:300,wood:0,iron:50}, incrFactor:2.0 },
+  { id:'construction', name:'建筑工艺', icon:'建造', desc:'降低建筑成本', maxLvl:5, costBase:{gold:250,wood:100,iron:30}, incrFactor:1.8 },
+  { id:'commerce', name:'商贾之道', icon:'商贸', desc:'提升钱币收入', maxLvl:5, costBase:{gold:300,wood:50,iron:0}, incrFactor:2.0 },
+  { id:'defense', name:'城防加固', icon:'防御', desc:'提升防御力', maxLvl:5, costBase:{gold:350,wood:150,iron:50}, incrFactor:2.0 },
+  { id:'logistics', name:'粮草先行', icon:'后勤', desc:'降低粮食消耗', maxLvl:5, costBase:{gold:200,wood:50,iron:0}, incrFactor:1.8 },
+]
+
+// ===== 应用 =====
+const app = createApp({
+  setup() {
+    const gameStarted = ref(false)
+    const difficulty = ref('normal')
+    const activeTab = ref('village')
+    const inputCmd = ref('')
+    const showConfirm = ref(false)
+    const confirmTitle = ref('')
+    const confirmText = ref('')
+    const confirmAction = ref(null)
+    const showLoadDialog = ref(false)
+    const selectedHero = ref(null)
+
+    // 战斗状态
+    const combatActive = ref(false)
+    const combatPhase = ref('')
+    const combatRound = ref(0)
+    const combatWin = ref(false)
+    const combatResultText = ref('')
+    const allyHp = ref(0)
+    const allyMaxHp = ref(0)
+    const allyMorale = ref(100)
+    const allyCount = ref(0)
+    const enemyHp = ref(0)
+    const enemyMaxHp = ref(0)
+    const enemyMorale = ref(100)
+    const enemyCount = ref(0)
+    const enemyData = ref(null)
+    const enemyType = ref('')
+    const allyName = ref('')
+    const trainCount = reactive({ infantry:5, archers:5, cavalry:3, musketeers:2 })
+
+    const state = reactive({
+      gold: 1000, food: 500, wood: 200, iron: 50, population: 20,
+      prestige: 50, day: 1, year: 1, season: 1, weather: 0,
+      buildings: [],
+      heroes: [],
+      troops: { infantry:10, archers:0, cavalry:0, musketeers:0 },
+      tech: {},
+      story: [],
+      options: [],
+    })
+
+    const tabs = [
+      { id:'village', label:'山寨', icon:'寨' },
+      { id:'build', label:'建造', icon:'建' },
+      { id:'heroes', label:'武将', icon:'将' },
+      { id:'military', label:'军事', icon:'军' },
+      { id:'tech', label:'科技', icon:'科' },
+      { id:'system', label:'系统', icon:'系' },
+    ]
+
+    // computed
+    const hasSave = computed(() => !!window.localStorage.getItem('stjyc_save'))
+    const seasonName = computed(() => { const s = ['春','夏','秋','冬']; return s[state.season-1] || '春' })
+    const weatherName = computed(() => { const w = ['晴','阴','雨','大雾','暴雨','暴雪']; return w[state.weather] || '晴' })
+    const weatherIcon = computed(() => { const w = ['☀','☁','🌧','🌫','⛈','❄']; return w[state.weather] || '☀' })
+    const availableBuildings = computed(() => BUILDING_DEFS.filter(b => !state.buildings.find(sb => sb.id === b.id)))
+    const recruitableHeroes = computed(() => HERO_DEFS.filter(h => !state.heroes.find(rh => rh.id === h.id)))
+    const totalTroops = computed(() => Object.values(state.troops).reduce((a,b) => a+b, 0))
+
+    // 方法
+    function fmt(n) { return n >= 1000 ? Math.floor(n/1000)+'k' : String(n) }
+
+    function addStory(text, type) {
+      state.story.push({ text, type: type || 'system' })
+      nextTick(() => {
+        const el = document.querySelector('.story-panel .body')
+        if (el) el.scrollTop = el.scrollHeight
+      })
+    }
+
+    function setOptions(opts) { state.options = opts }
+    function chooseOption(i) {
+      const opt = state.options[i]
+      if (!opt) return
+      state.options = []
+      if (opt.action) opt.action()
+    }
+
+    function processInput() {
+      const cmd = inputCmd.value.trim().toLowerCase()
+      inputCmd.value = ''
+      if (!cmd) return
+      if (cmd === '1' || cmd === '建' || cmd === '建造') { activeTab.value = 'build'; addStory('打开建造菜单...', 'system') }
+      else if (cmd === '2' || cmd === '推' || cmd === '推进') { advanceDay() }
+      else if (cmd === '3' || cmd === '招' || cmd === '招募') { activeTab.value = 'heroes'; addStory('打开武将面板...', 'system') }
+      else if (cmd === '帮助' || cmd === 'help') { addStory('可用指令：1建造/2推进/3招募/帮助', 'system') }
+      else { addStory('没有这个指令，输入"帮助"查看', 'warning') }
+    }
+
+    function canBuild(bld) {
+      return state.gold >= bld.costGold && state.wood >= (bld.costWood||0)
+    }
+
+    function buildIt(bldId) {
+      const def = BUILDING_DEFS.find(b => b.id === bldId)
+      if (!def) return
+      if (!canBuild(def)) { addStory('资源不足，无法建造！', 'warning'); return }
+      state.gold -= def.costGold
+      state.wood -= (def.costWood||0)
+      state.buildings.push({ ...def, level:1, assignedHero:null })
+      activeTab.value = 'village'
+      addStory('建造了【' + def.name + '】！', 'narrate')
+    }
+
+    function getBldOutput(b) {
+      if (!b.outputRes || b.outputRes === 'troops') return b.output
+      const base = b.outputBase || 0
+      const total = Math.floor(base * b.level)
+      return b.output.replace(/\d+/, String(total))
+    }
+
+    // 武将
+    function canRecruit(h) { return state.gold >= h.costGold && state.prestige >= h.costPrestige }
+    function recruitHero(hid) {
+      const def = HERO_DEFS.find(h => h.id === hid)
+      if (!def) return
+      if (!canRecruit(def)) { addStory('资源或威望不足！', 'warning'); return }
+      state.gold -= def.costGold
+      state.prestige -= def.costPrestige
+      const hero = { ...def, level:1, exp:0, expNeeded:100, loyalty:60, affection:30, assignedTo:null }
+      state.heroes.push(hero)
+      addStory('【' + def.name + '】加入山寨！', 'reward')
+    }
+
+    function heroAssign(hid) {
+      const hero = state.heroes.find(h => h.id === hid)
+      if (!hero) return
+      const opts = [{ text:'取消分配', style:'', action:()=>{ hero.assignedTo=null; addStory(hero.name+'回归自由状态。', 'system') } }]
+      for (const b of state.buildings) {
+        opts.push({ text: b.name, style:'primary', action:()=>{
+          hero.assignedTo = b.id
+          addStory(hero.name+'被分配到【'+b.name+'】。', 'system')
+        }})
+      }
+      setOptions(opts)
+    }
+
+    function heroTalk(hid) {
+      const hero = state.heroes.find(h => h.id === hid)
+      if (!hero) return
+      hero.affection = Math.min(100, hero.affection + 3)
+      addStory(hero.name + '：今日天气不错！(好感+3)', 'npc')
+    }
+
+    function heroGift(hid) {
+      const hero = state.heroes.find(h => h.id === hid)
+      if (!hero) return
+      setOptions([{ text:'美酒(50金)', style:'primary', action:()=>{
+        if (state.gold < 50) { addStory('钱不够！', 'warning'); return }
+        state.gold -= 50
+        hero.affection = Math.min(100, hero.affection + (hero.favorite==='美酒'?10:4))
+        addStory('赠送美酒给'+hero.name+'。好感+'+ (hero.favorite==='美酒'?10:4), 'reward')
+      }}])
+    }
+
+    // 军事
+    function trainTroops(type) {
+      const tdef = TROOP_TYPES[type]
+      if (!tdef) return
+      const count = trainCount[type] || 1
+      const goldCost = tdef.costGold * count
+      const foodCost = tdef.costFood * count
+      if (state.gold < goldCost || state.food < foodCost) { addStory('资源不足！', 'warning'); return }
+      state.gold -= goldCost
+      state.food -= foodCost
+      state.troops[type] = (state.troops[type] || 0) + count
+      addStory('训练了 ' + count + ' 名' + tdef.name + '！', 'system')
+    }
+
+    function initCombat(enid) {
+      if (totalTroops.value < 5) { addStory('兵力不足5人，无法出征！', 'warning'); return }
+      const en = ENEMIES.find(e => e.id === enid)
+      if (!en) return
+      enemyData.value = en
+      enemyType.value = en.type
+      allyName.value = '屯兵寨义军'
+      allyCount.value = totalTroops.value
+      allyMaxHp.value = allyCount.value * 10
+      allyHp.value = allyMaxHp.value
+      allyMorale.value = 80
+      enemyCount.value = en.count
+      enemyMaxHp.value = en.hp
+      enemyHp.value = en.hp
+      enemyMorale.value = 100
+      combatRound.value = 0
+      combatPhase.value = 'fighting'
+      combatActive.value = true
+      addStory('出征！目标：' + en.name + '！', 'narrate')
+    }
+
+    function doCombatRound() {
+      if (combatPhase.value !== 'fighting') return
+      const en = enemyData.value
+      if (!en) return
+      const baseDmg = Math.max(5, Math.floor(allyCount.value * 3))
+      const totalDmg = baseDmg + Math.floor(Math.random() * 10 - 5)
+      enemyHp.value = Math.max(0, enemyHp.value - totalDmg)
+      addStory('第' + combatRound.value + '回合：我军造成 ' + totalDmg + ' 点伤害！', 'system')
+      if (enemyHp.value > 0) {
+        const enemyDmg = Math.max(3, Math.floor(enemyCount.value * en.atk * 0.8))
+        allyHp.value = Math.max(0, allyHp.value - enemyDmg)
+        addStory('敌军反击！造成 ' + enemyDmg + ' 点伤害。', 'warning')
+      }
+      combatRound.value++
+      if (enemyHp.value <= 0) {
+        combatWin.value = true
+        combatPhase.value = 'result'
+        combatResultText.value = '敌军溃败！获得：' + en.reward
+        addStory('大获全胜！' + en.reward, 'reward')
+      } else if (allyHp.value <= 0) {
+        combatWin.value = false
+        combatPhase.value = 'result'
+        combatResultText.value = '我军伤亡惨重，被迫撤退。'
+        addStory('兵败撤退，损失惨重...', 'warning')
+      }
+    }
+
+    function endCombat() {
+      combatActive.value = false
+      combatPhase.value = ''
+      enemyData.value = null
+    }
+
+    // 科技
+    function techCost(tdef) {
+      const lvl = state.tech[tdef.id] || 0
+      return { gold: Math.floor(tdef.costBase.gold * Math.pow(tdef.incrFactor, lvl)) }
+    }
+    function canResearch(tdef) {
+      const cost = techCost(tdef)
+      return state.gold >= cost.gold
+    }
+    function researchTech(tid) {
+      const tdef = TECH_DEFS.find(t => t.id === tid)
+      if (!tdef) return
+      const lvl = state.tech[tid] || 0
+      if (lvl >= tdef.maxLvl) return
+      if (!canResearch(tdef)) { addStory('资源不足！', 'warning'); return }
+      const cost = techCost(tdef)
+      state.gold -= cost.gold
+      state.tech[tid] = (state.tech[tid]||0) + 1
+      addStory(tdef.name + '升级到Lv.' + state.tech[tid] + '！', 'reward')
+    }
+
+    // 推进日
+    function advanceDay() {
+      state.day++
+      if (state.day > 90) { state.day = 1; state.year++ }
+      state.season = Math.ceil(state.day / 22.5)
+      if (state.season > 4) state.season = 1
+      state.weather = Math.random() < 0.6 ? 0 : (Math.random() < 0.7 ? 1 : 2)
+      // 产出
+      for (const b of state.buildings) {
+        if (!b.outputRes || b.outputRes === 'troops') continue
+        const amt = Math.floor((b.outputBase||0) * b.level)
+        if (amt > 0) {
+          if (b.outputRes === 'food') state.food += amt
+          else if (b.outputRes === 'wood') state.wood += amt
+          else if (b.outputRes === 'iron') state.iron += amt
+          else if (b.outputRes === 'population') state.population += Math.max(1, Math.floor(amt/10))
+        }
+      }
+      // 消耗
+      const foodCost = Math.max(1, Math.floor(state.population * 2 + totalTroops.value * 3))
+      state.food -= foodCost
+      if (state.food < 0) { state.food = 0; addStory('粮食告罄！寨中人心惶惶...', 'warning'); state.prestige = Math.max(0, state.prestige - 2) }
+      // 收入
+      state.gold += Math.floor(state.population * 0.5 + state.prestige * 0.2)
+      // 武将经验
+      for (const h of state.heroes) {
+        h.exp = (h.exp||0) + 5
+        while (h.exp >= (h.expNeeded||100)) {
+          h.exp -= (h.expNeeded||100)
+          h.level = (h.level||1) + 1
+          h.atk += (h.growth||{}).atk||0
+          h.def += (h.growth||{}).def||0
+          addStory(h.name + '升级到Lv.' + h.level + '！', 'reward')
+          h.expNeeded = Math.floor((h.expNeeded||100) * 1.5)
+        }
+      }
+      addStory('第' + state.day + '日，季节：' + seasonName.value + '，天气：' + weatherName.value, 'system')
+      addStory('本日消耗粮食：' + foodCost, 'system')
+    }
+
+    function saveGame() {
+      const data = {
+        gold:state.gold, food:state.food, wood:state.wood, iron:state.iron,
+        population:state.population, prestige:state.prestige,
+        day:state.day, year:state.year, season:state.season,
+        buildings:state.buildings, heroes:state.heroes, troops:state.troops, tech:state.tech,
+      }
+      window.localStorage.setItem('stjyc_save', JSON.stringify(data))
+      addStory('游戏已保存！', 'system')
+    }
+
+    function loadGame() {
+      const raw = window.localStorage.getItem('stjyc_save')
+      if (!raw) return
+      try {
+        const data = JSON.parse(raw)
+        Object.assign(state, {
+          gold:data.gold, food:data.food, wood:data.wood, iron:data.iron,
+          population:data.population, prestige:data.prestige,
+          day:data.day, year:data.year, season:data.season||1,
+          buildings:data.buildings||[], heroes:data.heroes||[], troops:data.troops||{infantry:10,archers:0,cavalry:0,musketeers:0}, tech:data.tech||{},
+        })
+        gameStarted.value = true
+        state.story = []
+        addStory('聚义事业继续...', 'narrate')
+      } catch(e) { addStory('读档失败：' + e.message, 'warning') }
+    }
+
+    function startGame(diff) {
+      difficulty.value = diff
+      state.gold = 1000; state.food = 500; state.wood = 200; state.iron = 50
+      state.population = 20; state.prestige = 50
+      state.day = 1; state.year = 1; state.season = 1; state.weather = 0
+      state.buildings = []; state.heroes = []; state.tech = {}; state.troops = { infantry:10, archers:0, cavalry:0, musketeers:0 }
+      state.story = []; state.options = []
+      gameStarted.value = true
+      if (diff === 'hard') { state.gold = 800; state.food = 400 }
+      if (diff === 'hell') { state.gold = 500; state.food = 300; state.prestige = 30 }
+      addStory('='.repeat(40), 'system')
+      addStory('隋大业七年，炀帝无道，天下大乱。', 'narrate')
+      addStory('你本是太原一名普通军校，眼见朝廷腐败，心中渐生去意。', 'narrate')
+      addStory('一日，你带着几名兄弟离开军营，在太原附近的山中，找到一处易守难攻之地。', 'narrate')
+      addStory('"就在这里吧。" 你望着山谷，"建一个寨子，聚天下英雄，做一番事业。"', 'player')
+      addStory('屯兵寨，就此建立。', 'narrate')
+      addStory('='.repeat(40), 'system')
+      setOptions([{ text:'开始经营山寨', style:'primary', action:()=>{ activeTab.value='build'; addStory('打开建造面板，先建一座农田吧！', 'system') } }])
+    }
+
+    function confirmQuit() {
+      confirmTitle.value = '返回标题'
+      confirmText.value = '确定要返回标题画面吗？未保存的进度将会丢失。'
+      confirmAction.value = () => { gameStarted.value = false; showConfirm.value = false }
+      showConfirm.value = true
+    }
+    function doConfirm() { if (confirmAction.value) confirmAction.value() }
+
+    return {
+      gameStarted, difficulty, activeTab, inputCmd, state,
+      showConfirm, confirmTitle, confirmText, tabs,
+      hasSave, seasonName, weatherName, weatherIcon, availableBuildings,
+      recruitableHeroes, totalTroops,
+      fmt, addStory, setOptions, chooseOption, processInput,
+      canBuild, buildIt, getBldOutput,
+      canRecruit, recruitHero, heroAssign, heroTalk, heroGift,
+      advanceDay, saveGame, loadGame, startGame, confirmQuit, doConfirm, showLoadDialog,
+      TROOP_TYPES, ENEMIES, trainCount,
+      combatActive, combatPhase, combatRound, combatWin, combatResultText,
+      allyHp, allyMaxHp, allyMorale, allyCount,
+      enemyHp, enemyMaxHp, enemyMorale, enemyCount, enemyData,
+      allyName, initCombat, doCombatRound, endCombat,
+      TECH_DEFS, techCost, canResearch, researchTech,
+      selectedHero,
+    }
+  }
+})
+
+app.mount('#app')
+</script>
+</body>
+</html>
