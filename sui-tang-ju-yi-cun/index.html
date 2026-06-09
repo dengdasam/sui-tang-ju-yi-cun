@@ -65,6 +65,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
 .sline.reward{color:var(--gold);}
 .sline.event{color:var(--accent);}
 .sline.divider{color:var(--border);letter-spacing:2px;}
+.sline.bond{color:var(--purple);font-weight:bold;}
+.sline.achieve{color:#f0a03a;font-weight:bold;}
 
 /* 选项区 */
 .input-area{padding:7px 12px;border-top:1px solid var(--border);flex-shrink:0;}
@@ -87,6 +89,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
 /* 卡片 */
 .card{background:var(--panel-bg);border:1px solid var(--border);padding:9px 12px;margin-bottom:7px;}
 .card.locked{opacity:.5;}
+.card.bond-active{border-color:var(--purple);box-shadow:0 0 6px rgba(142,68,173,.3);}
+.card.achieve-done{border-color:var(--gold-dim);background:#2a1f0d;}
 .card .cname{color:var(--text-bright);font-size:14px;font-weight:bold;}
 .card .cdesc{color:var(--text-dim);font-size:12px;margin-top:2px;}
 .card .cstats{display:flex;flex-wrap:wrap;gap:12px;margin-top:5px;font-size:12px;color:var(--text);}
@@ -137,6 +141,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
 .fill-green{background:var(--green-bright);}
 .fill-blue{background:var(--blue);}
 .fill-gold{background:var(--gold);}
+.fill-purple{background:var(--purple);}
+
+/* 成就通知 */
+.achieve-toast{position:fixed;top:60px;right:16px;z-index:300;background:#2a1f0d;border:2px solid var(--gold);padding:10px 16px;color:var(--gold);font-size:14px;max-width:260px;animation:fadeInOut 4s forwards;}
+@keyframes fadeInOut{0%{opacity:0;transform:translateX(30px)}10%{opacity:1;transform:translateX(0)}80%{opacity:1}100%{opacity:0}}
+
+/* 羁绊标签 */
+.bond-tag{display:inline-block;padding:1px 6px;font-size:11px;border-radius:2px;background:#2a1040;color:#c05af0;border:1px solid #6a38a0;margin-left:4px;}
+.bond-tag.active{background:#451a70;color:#e080ff;border-color:#9050d0;}
 </style>
 </head>
 <body>
@@ -150,7 +163,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
     <button class="btn" @click="startGame('hard')">乱世英雄（困难）</button>
     <button class="btn" @click="startGame('hell')">地狱模式</button>
     <button v-if="hasSave" class="btn" style="margin-top:16px;border-color:var(--gold-dim);" @click="loadGame">继续游戏</button>
-    <div class="version">v1.0 | 隋唐聚义村</div>
+    <div class="version">v1.1 | 隋唐聚义村 · 新增羁绊/成就/扩展事件</div>
   </div>
 
   <!-- 游戏界面 -->
@@ -164,6 +177,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
       <div class="stat-item"><span class="lbl">威望</span><span class="val">{{gs.prestige}}</span></div>
       <div class="stat-item"><span class="lbl">人口</span><span class="val">{{gs.population}}</span></div>
       <div class="stat-item"><span class="lbl">民忠</span><span class="val">{{gs.loyalty}}</span></div>
+      <div class="stat-item" v-if="activeBondsCount>0"><span class="lbl">羁绊</span><span class="val" style="color:var(--purple)">{{activeBondsCount}}</span></div>
+      <div class="stat-item" v-if="gs.achievements.length>0"><span class="lbl">成就</span><span class="val" style="color:#f0a03a">{{gs.achievements.length}}/35</span></div>
       <div class="date-info">第{{gs.year}}年 · {{SEASONS[gs.season-1]}} · 第{{gs.dayInSeason}}日 | {{WEATHERS[gs.weather].icon}}{{WEATHERS[gs.weather].name}}</div>
     </div>
 
@@ -198,7 +213,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
               <div>📍 难度：{{['普通','困难','地狱'][['normal','hard','hell'].indexOf(gs.difficulty)]||'普通'}}</div>
               <div>🏛 寨子规模：{{bldLevel('guildhall')}}级</div>
               <div>🏗 已建建筑：{{gs.buildings.length}}座</div>
-              <div>⚔ 已征讨势力：{{gs.defeatedFactions.length}}/7</div>
+              <div>⚔ 已征讨势力：{{gs.defeatedFactions.filter(f=>!f.startsWith('_')).length}}/7</div>
+              <div>🔮 激活羁绊：{{activeBondsCount}}组</div>
+              <div>🏆 获得成就：{{gs.achievements.length}}/35</div>
             </div>
             <div v-for="b in gs.buildings" :key="b.id" class="card">
               <div class="cname">{{b.name}} <span style="color:var(--gold-dim)">Lv.{{b.level}}</span>
@@ -207,8 +224,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
               <div class="cdesc">{{getBldEffect(b)}}</div>
               <div class="progress-bar"><div class="progress-fill fill-gold" :style="{width:(b.level/5*100)+'%'}"></div></div>
               <div class="cactions" v-if="!b.underConstruction">
-                <button class="btn-sm gold" @click="upgradeBld(b.id)" :disabled="b.level>=5||!canUpgradeBld(b.id)">升级</button>
+                <button class="btn-sm gold" @click="upgradeBld(b.id)" :disabled="b.level>=5||!canUpgradeBld(b.id)">升级(需{{getBldUpgradeDays(b.id)}}日)</button>
                 <button class="btn-sm" @click="assignHeroToBld(b.id)">分配武将</button>
+                <span v-if="b.assignedHero" style="font-size:11px;color:var(--text-dim)">当前：{{getHeroName(b.assignedHero)}}</span>
+              </div>
+              <div v-else class="cactions">
+                <div class="progress-bar" style="width:100%;margin-top:0;height:8px;"><div class="progress-fill fill-blue" :style="{width:(100-b.constructDays/getBldUpgradeDays(b.id)*100)+'%'}"></div></div>
               </div>
             </div>
             <div v-if="gs.buildings.length===0" style="color:var(--text-dim);text-align:center;padding:20px;">尚未建造任何建筑</div>
@@ -236,10 +257,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
           <!-- 武将面板 -->
           <div v-if="activeTab==='heroes'">
             <div class="section-title">👥 武将管理</div>
+            <!-- 激活的羁绊 -->
+            <div v-if="activeBondsCount>0" style="margin-bottom:12px;padding:8px;background:#1a0f2a;border:1px solid #5a2a8a;">
+              <div style="color:var(--purple);font-size:13px;margin-bottom:6px;">🔮 激活的羁绊：</div>
+              <div v-for="bond in activeHeroBonds" :key="bond.id" style="font-size:12px;margin:3px 0;color:#c05af0;">
+                ✦ {{bond.name}}：{{bond.combatDesc}}
+              </div>
+            </div>
             <div v-if="gs.heroes.length>0">
               <div v-for="h in gs.heroes" :key="h.id" class="card">
                 <div class="cname">{{h.name}}<span :class="'badge '+h.rank.toLowerCase()">{{h.rank}}</span>
-                  <span style="color:var(--gold-dim);font-size:12px"> Lv.{{h.level}}</span></div>
+                  <span style="color:var(--gold-dim);font-size:12px"> Lv.{{h.level}}</span>
+                  <span v-for="bt in getHeroBondTags(h.id)" :key="bt.id" :class="['bond-tag', bt.active?'active':'']">{{bt.name}}</span>
+                </div>
                 <div class="cdesc">{{h.title}} · {{h.desc}}</div>
                 <div class="cstats">
                   <span>武{{Math.floor(h.atk)}}</span><span>智{{Math.floor(h.int)}}</span>
@@ -248,13 +278,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
                 </div>
                 <div class="bar-row">
                   <span class="bar-label">经验</span>
-                  <div class="bar-wrap"><div class="bar-fill fill-blue" :style="{width:(h.exp/h.expNext*100)+'%'}"></div></div>
+                  <div class="bar-wrap"><div class="bar-fill fill-blue" :style="{width:Math.min(100,h.exp/h.expNext*100)+'%'}"></div></div>
                   <span style="font-size:11px;color:var(--text-dim)">{{h.exp}}/{{h.expNext}}</span>
                 </div>
                 <div class="bar-row">
                   <span class="bar-label">忠诚</span>
-                  <div class="bar-wrap"><div class="bar-fill fill-red" :style="{width:h.loyalty+'%'}"></div></div>
+                  <div class="bar-wrap"><div class="bar-fill fill-green" :style="{width:h.loyalty+'%'}"></div></div>
                   <span style="font-size:11px;color:var(--text-dim)">{{h.loyalty}}</span>
+                </div>
+                <div class="bar-row">
+                  <span class="bar-label">好感</span>
+                  <div class="bar-wrap"><div class="bar-fill fill-purple" :style="{width:(h.affection||0)+'%'}"></div></div>
+                  <span style="font-size:11px;color:var(--text-dim)">{{h.affection||0}}</span>
                 </div>
                 <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">
                   分配：{{h.assignedTo?getBldName(h.assignedTo):'待命'}} | 技能：{{h.skill}}
@@ -279,12 +314,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
                 <button class="btn-sm gold" @click="recruitHero(h.id)" :disabled="!canRecruit(h)">招募</button>
               </div>
             </div>
+
+            <!-- 羁绊总览 -->
+            <div class="section-title" style="margin-top:16px;">🔮 武将羁绊总览</div>
+            <div v-for="bond in HERO_BONDS" :key="bond.id" :class="['card', isBondActive(bond)?'bond-active':'locked']">
+              <div class="cname">{{bond.name}}
+                <span v-if="isBondActive(bond)" style="color:var(--purple);font-size:11px;"> ✦激活</span>
+                <span v-else style="color:var(--text-dim);font-size:11px;"> 未激活</span>
+              </div>
+              <div class="cdesc">成员：{{bond.members.map(id=>HERO_DEFS.find(h=>h.id===id)?.name||id).join(' · ')}}</div>
+              <div style="font-size:12px;color:var(--purple);margin-top:3px;">战斗效果：{{bond.combatDesc}}</div>
+              <div style="font-size:11px;color:var(--text-dim)">条件：{{bond.condition}}</div>
+            </div>
           </div>
 
           <!-- 军事面板 -->
           <div v-if="activeTab==='military'">
             <div class="section-title">⚔ 军事</div>
-            <div style="margin-bottom:10px;font-size:13px;color:var(--text-dim)">总兵力：{{totalTroops}}人</div>
+            <div style="margin-bottom:10px;font-size:13px;color:var(--text-dim)">总兵力：{{totalTroops}}人 | 战力：{{myPower}}</div>
+            <!-- 激活羁绊的战斗加成提示 -->
+            <div v-if="activeBondsCount>0" style="margin-bottom:8px;padding:6px 10px;background:#1a0f2a;border:1px solid #5a2a8a;font-size:12px;color:#c05af0;">
+              🔮 羁绊加成已激活（{{activeBondsCount}}组）：{{getBondCombatSummary()}}
+            </div>
             <div v-for="(td,tk) in TROOP_TYPES" :key="tk" class="card">
               <div class="cname">{{td.icon}} {{td.name}} <span style="color:var(--gold-dim)">现有 {{gs.troops[tk]||0}} 人</span></div>
               <div class="cdesc">{{td.desc}}</div>
@@ -356,6 +407,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
             </div>
           </div>
 
+          <!-- 成就面板 -->
+          <div v-if="activeTab==='achieve'">
+            <div class="section-title">🏆 成就系统 <span style="font-size:13px;color:var(--text-dim)">{{gs.achievements.length}}/35</span></div>
+            <div v-for="cat in ACHIEVE_CATS" :key="cat.id">
+              <div style="color:var(--gold-dim);font-size:13px;margin:10px 0 5px;padding-bottom:3px;border-bottom:1px solid var(--border);">{{cat.icon}} {{cat.name}}</div>
+              <div v-for="ach in ACHIEVEMENTS.filter(a=>a.cat===cat.id)" :key="ach.id" :class="['card', gs.achievements.includes(ach.id)?'achieve-done':'locked']">
+                <div class="cname">
+                  <span v-if="gs.achievements.includes(ach.id)" style="color:var(--gold);">✦ </span>
+                  <span v-else style="color:var(--text-dim);">○ </span>
+                  {{ach.name}}
+                  <span v-if="ach.hidden&&!gs.achievements.includes(ach.id)" style="color:var(--text-dim);font-size:11px;"> [隐藏]</span>
+                </div>
+                <div class="cdesc">{{gs.achievements.includes(ach.id)||!ach.hidden ? ach.desc : '???'}}</div>
+                <div v-if="gs.achievements.includes(ach.id)" style="font-size:11px;color:var(--gold-dim);margin-top:2px;">奖励：{{ach.reward}}</div>
+              </div>
+            </div>
+          </div>
+
           <!-- 系统面板 -->
           <div v-if="activeTab==='system'">
             <div class="section-title">⚙ 系统</div>
@@ -364,9 +433,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
               <button class="btn-sm" style="padding:8px;" @click="loadGame">📂 读档</button>
               <button class="btn-sm red" style="padding:8px;" @click="confirmAct('返回标题','确定返回标题？未保存进度将丢失。',()=>{gs.started=false})">返回标题</button>
             </div>
-            <div style="margin-top:16px;color:var(--text-dim);font-size:12px;">
-              <div>已征讨势力：{{gs.defeatedFactions.join('、')||'无'}}</div>
-              <div>已探索地点：{{gs.exploredLocations.join('、')||'无'}}</div>
+            <div style="margin-top:16px;color:var(--text-dim);font-size:12px;line-height:2;">
+              <div>已征讨势力：{{gs.defeatedFactions.filter(f=>!f.startsWith('_')).join('、')||'无'}}</div>
+              <div>已探索地点：{{gs.exploredLocations.length}}处</div>
+              <div>激活羁绊：{{activeBondsCount}}组</div>
+              <div>获得成就：{{gs.achievements.length}}/35</div>
             </div>
           </div>
 
@@ -386,6 +457,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
       </div>
     </div>
   </div>
+
+  <!-- 成就通知 Toast -->
+  <div v-if="achieveToast.show" class="achieve-toast">
+    🏆 成就解锁：{{achieveToast.name}}<br><span style="font-size:12px;color:var(--text-dim)">{{achieveToast.desc}}</span>
+  </div>
 </div>
 
 <script>
@@ -396,6 +472,12 @@ const { createApp, reactive, computed, nextTick, ref } = Vue
 // ============================================================
 
 const SEASONS = ['春','夏','秋','冬']
+const SEASON_FESTIVALS = {
+  1: { day: 7, name:'元宵佳节', event:'festival_lantern' },
+  2: { day: 5, name:'端午节', event:'festival_dragon' },
+  3: { day: 15, name:'中秋节', event:'festival_moon' },
+  4: { day: 1, name:'重阳节', event:'festival_double9' },
+}
 
 const WEATHERS = [
   { name:'晴天',icon:'☀',foodMod:1.1,combatMod:1.0,moveMod:1.0 },
@@ -408,36 +490,189 @@ const WEATHERS = [
 ]
 
 const BLD_DEFS = [
-  { id:'guildhall', name:'聚义厅', icon:'🏛', desc:'寨子核心建筑，决定规模和解锁上限', costGold:200, costWood:100, outputType:'core', unlockFaction:null, unlockBld:null, unlockDesc:'' },
-  { id:'farmhouse', name:'农舍', icon:'🏠', desc:'增加人口上限', costGold:80, costWood:30, outputType:'population', unlockFaction:null, unlockBld:'guildhall', unlockDesc:'需建聚义厅' },
-  { id:'farm', name:'农田', icon:'🌾', desc:'生产粮食', costGold:100, costWood:50, outputType:'food', baseOutput:30, unlockFaction:null, unlockBld:'guildhall', unlockDesc:'需建聚义厅' },
-  { id:'lumber', name:'伐木场', icon:'🪵', desc:'生产木材', costGold:120, costWood:60, outputType:'wood', baseOutput:20, unlockFaction:null, unlockBld:'guildhall', unlockDesc:'需建聚义厅' },
-  { id:'mine', name:'矿场', icon:'⛏', desc:'开采铁矿', costGold:150, costWood:80, outputType:'iron', baseOutput:10, unlockFaction:null, unlockBld:'guildhall', unlockDesc:'需聚义厅Lv2', unlockBldLevel:2 },
-  { id:'smithy', name:'铁匠铺', icon:'⚒', desc:'解锁火铳兵，提升全军攻击', costGold:300, costWood:100, costIron:30, outputType:'military', unlockFaction:'wagang', unlockBld:'guildhall', unlockBldLevel:3, unlockDesc:'需聚义厅Lv3且击败瓦岗寨' },
-  { id:'barracks', name:'军营', icon:'⛺', desc:'降低训练费用，提升效率', costGold:250, costWood:80, outputType:'training', unlockFaction:null, unlockBld:'guildhall', unlockBldLevel:3, unlockDesc:'需聚义厅Lv3' },
-  { id:'stable', name:'马厩', icon:'🐴', desc:'解锁骑兵，提升骑兵战力', costGold:400, costWood:120, outputType:'cavalry', unlockFaction:'wangshichong', unlockBld:'guildhall', unlockBldLevel:4, unlockDesc:'需聚义厅Lv4且击败王世充' },
-  { id:'market', name:'布庄', icon:'🏪', desc:'每日产出钱币', costGold:350, costWood:100, outputType:'gold', baseOutput:40, unlockFaction:'wangshichong', unlockBld:null, unlockDesc:'需击败王世充' },
-  { id:'tavern', name:'酒肆', icon:'🍶', desc:'产出钱币，提升民忠', costGold:300, costWood:80, outputType:'gold', baseOutput:35, unlockFaction:'doujiantian', unlockBld:null, unlockDesc:'需击败窦建德' },
-  { id:'pawnshop', name:'当铺', icon:'💰', desc:'产出钱币，可典当资源', costGold:400, costWood:120, outputType:'gold', baseOutput:50, unlockFaction:'yuwenhuaji', unlockBld:null, unlockDesc:'需击败宇文化及' },
-  { id:'clinic', name:'医馆', icon:'🏥', desc:'提升战后伤兵恢复速度', costGold:200, costWood:60, outputType:'heal', unlockFaction:null, unlockBld:'guildhall', unlockBldLevel:3, unlockDesc:'需聚义厅Lv3' },
-  { id:'altar', name:'祭坛', icon:'🕍', desc:'每日增加威望，可举行祭祀', costGold:500, costWood:200, costIron:50, outputType:'prestige', baseOutput:5, unlockFaction:null, unlockBld:'guildhall', unlockBldLevel:5, unlockDesc:'需聚义厅Lv5' },
+  { id:'guildhall', name:'聚义厅', icon:'🏛', desc:'寨子核心建筑，决定规模和解锁上限', costGold:200, costWood:100, outputType:'core', unlockFaction:null, unlockBld:null, unlockDesc:'', buildDays:0 },
+  { id:'farmhouse', name:'农舍', icon:'🏠', desc:'增加人口上限，每级+8人口', costGold:80, costWood:30, outputType:'population', unlockFaction:null, unlockBld:'guildhall', unlockDesc:'需建聚义厅', buildDays:1 },
+  { id:'farm', name:'农田', icon:'🌾', desc:'生产粮食，受天气影响', costGold:100, costWood:50, outputType:'food', baseOutput:30, unlockFaction:null, unlockBld:'guildhall', unlockDesc:'需建聚义厅', buildDays:1 },
+  { id:'lumber', name:'伐木场', icon:'🪵', desc:'生产木材', costGold:120, costWood:60, outputType:'wood', baseOutput:20, unlockFaction:null, unlockBld:'guildhall', unlockDesc:'需建聚义厅', buildDays:1 },
+  { id:'mine', name:'矿场', icon:'⛏', desc:'开采铁矿', costGold:150, costWood:80, outputType:'iron', baseOutput:10, unlockFaction:null, unlockBld:'guildhall', unlockDesc:'需聚义厅Lv2', unlockBldLevel:2, buildDays:2 },
+  { id:'smithy', name:'铁匠铺', icon:'⚒', desc:'解锁火铳兵，提升全军攻击', costGold:300, costWood:100, costIron:30, outputType:'military', unlockFaction:'wagang', unlockBld:'guildhall', unlockBldLevel:3, unlockDesc:'需聚义厅Lv3且击败瓦岗寨', buildDays:3 },
+  { id:'barracks', name:'军营', icon:'⛺', desc:'降低训练费用，提升效率', costGold:250, costWood:80, outputType:'training', unlockFaction:null, unlockBld:'guildhall', unlockBldLevel:3, unlockDesc:'需聚义厅Lv3', buildDays:2 },
+  { id:'stable', name:'马厩', icon:'🐴', desc:'解锁骑兵，提升骑兵战力', costGold:400, costWood:120, outputType:'cavalry', unlockFaction:'wangshichong', unlockBld:'guildhall', unlockBldLevel:4, unlockDesc:'需聚义厅Lv4且击败王世充', buildDays:4 },
+  { id:'market', name:'布庄', icon:'🏪', desc:'每日产出钱币', costGold:350, costWood:100, outputType:'gold', baseOutput:40, unlockFaction:'wangshichong', unlockBld:null, unlockDesc:'需击败王世充', buildDays:3 },
+  { id:'tavern', name:'酒肆', icon:'🍶', desc:'产出钱币，提升民忠', costGold:300, costWood:80, outputType:'gold', baseOutput:35, unlockFaction:'doujiantian', unlockBld:null, unlockDesc:'需击败窦建德', buildDays:3 },
+  { id:'pawnshop', name:'当铺', icon:'💰', desc:'产出钱币，可典当资源', costGold:400, costWood:120, outputType:'gold', baseOutput:50, unlockFaction:'yuwenhuaji', unlockBld:null, unlockDesc:'需击败宇文化及', buildDays:3 },
+  { id:'clinic', name:'医馆', icon:'🏥', desc:'提升战后伤兵恢复速度', costGold:200, costWood:60, outputType:'heal', unlockFaction:null, unlockBld:'guildhall', unlockBldLevel:3, unlockDesc:'需聚义厅Lv3', buildDays:2 },
+  { id:'altar', name:'祭坛', icon:'🕍', desc:'每日增加威望，可举行祭祀', costGold:500, costWood:200, costIron:50, outputType:'prestige', baseOutput:5, unlockFaction:null, unlockBld:'guildhall', unlockBldLevel:5, unlockDesc:'需聚义厅Lv5', buildDays:5 },
 ]
 
 const HERO_DEFS = [
-  { id:'chengYaoJin', name:'程咬金', rank:'S', title:'福将', desc:'三板斧打天下，豪爽仗义', atk:75, int:45, cmd:70, pol:40, chm:65, costGold:200, costPrestige:0, recruitCond:null, skill:'三板斧', skillDesc:'对敌前排造成120%伤害', passive:'福将（受伤-15%）', growth:{atk:2,int:0.5,cmd:1.5,pol:0.5,chm:1}, favorite:'美酒', expNext:100 },
-  { id:'wangBoDang', name:'王伯当', rank:'S', title:'神射手', desc:'忠肝义胆，箭术精湛', atk:72, int:55, cmd:68, pol:48, chm:60, costGold:250, costPrestige:0, recruitCond:null, skill:'百步穿杨', skillDesc:'弓兵攻击+40%持续2回合', passive:'神射手（弓兵暴击+15%）', growth:{atk:1.5,int:1,cmd:1,pol:0.5,chm:1}, favorite:'弓箭', expNext:100 },
-  { id:'qinShuba', name:'秦叔宝（少年）', rank:'S', title:'少年英杰', desc:'少年秦琼，才华初显，可觉醒', atk:65, int:50, cmd:58, pol:40, chm:75, costGold:250, costPrestige:0, recruitCond:null, skill:'年少勇猛', skillDesc:'自身攻击+40%持续2回合', passive:'天赋异禀（经验+30%）', growth:{atk:3,int:2,cmd:2,pol:1.5,chm:2}, favorite:'名剑', expNext:100 },
-  { id:'weizhen', name:'魏徵', rank:'A', title:'谏议大夫', desc:'直言敢谏，以人为镜，政治奇才', atk:35, int:75, cmd:52, pol:88, chm:55, costGold:200, costPrestige:0, recruitCond:'聚义厅Lv2后来访', skill:'直言敢谏', skillDesc:'所有资源临时+20%（一次性）', passive:'兼听则明（商铺收入+20%）', growth:{atk:0.2,int:1.5,cmd:0.8,pol:3,chm:0.5}, favorite:'史书', expNext:100 },
-  { id:'qinQiong', name:'秦琼', rank:'SSS', title:'门神', desc:'隋唐第一猛将，忠义无双', atk:82, int:60, cmd:75, pol:55, chm:78, costGold:300, costPrestige:100, recruitCond:'击败瓦岗寨', skill:'酣战鬼神', skillDesc:'全军攻击+30%持续3回合', passive:'骑兵统帅（骑兵攻击+25%）', growth:{atk:3,int:1.5,cmd:2.5,pol:1.8,chm:1.5}, favorite:'名剑', expNext:150 },
-  { id:'danXiongXin', name:'单雄信', rank:'S', title:'飞将', desc:'绿林出身，马上功夫一流', atk:76, int:50, cmd:62, pol:38, chm:58, costGold:350, costPrestige:30, recruitCond:'击败瓦岗寨', skill:'赤发突骑', skillDesc:'骑兵本回合攻击+50%', passive:'桀骜不驯（统率+15%）', growth:{atk:2,int:0.5,cmd:1.5,pol:0.5,chm:1}, favorite:'战马', expNext:100 },
-  { id:'peiYuanQing', name:'裴元庆', rank:'SS', title:'银锤太保', desc:'少年猛将，银锤震天下', atk:84, int:42, cmd:65, pol:35, chm:55, costGold:450, costPrestige:50, recruitCond:'击败瓦岗寨，铁匠铺已建', skill:'银锤震天', skillDesc:'对步兵造成150%伤害', passive:'力大无穷（步兵攻击+30%）', growth:{atk:2.5,int:0.3,cmd:1.5,pol:0.3,chm:0.5}, favorite:'铁锤', expNext:120 },
-  { id:'liJing', name:'李靖', rank:'SSS', title:'军神', desc:'用兵如神，兵法大家', atk:68, int:92, cmd:88, pol:75, chm:70, costGold:500, costPrestige:150, recruitCond:'击败王世充', skill:'奇正相生', skillDesc:'敌全属性-20%持续2回合', passive:'兵家至圣（全兵种攻击+15%）', growth:{atk:1,int:3,cmd:2.5,pol:2,chm:1}, favorite:'兵书', expNext:150 },
-  { id:'yuChiGong', name:'尉迟恭', rank:'SS', title:'黑煞神', desc:'铁匠出身，力大无穷', atk:80, int:55, cmd:72, pol:50, chm:68, costGold:400, costPrestige:60, recruitCond:'击败王世充', skill:'铁壁门神', skillDesc:'全军防御+40%持续2回合', passive:'黑煞星（骑兵冲锋+25%）', growth:{atk:2.5,int:0.5,cmd:2,pol:0.5,chm:0.5}, favorite:'良马', expNext:120 },
-  { id:'luoCheng', name:'罗成', rank:'SS', title:'冷面寒枪', desc:'白马银枪，少年英雄', atk:78, int:58, cmd:68, pol:42, chm:80, costGold:350, costPrestige:60, recruitCond:'击败窦建德，马厩已建', skill:'回马枪', skillDesc:'反击伤害+100%持续1回合', passive:'冷面寒枪（暴击率+20%）', growth:{atk:2.5,int:1.5,cmd:1.5,pol:0.5,chm:1.5}, favorite:'银枪', expNext:120 },
-  { id:'liJi', name:'李勣', rank:'SS', title:'英国公', desc:'文武双全，治国安邦', atk:65, int:82, cmd:85, pol:75, chm:68, costGold:450, costPrestige:80, recruitCond:'击败窦建德', skill:'稳如泰山', skillDesc:'我军不受士气下降影响3回合', passive:'军略大家（全军攻防+10%）', growth:{atk:1,int:2,cmd:2.5,pol:2,chm:1}, favorite:'策论', expNext:120 },
-  { id:'houJunJi', name:'侯君集', rank:'S', title:'陈国公', desc:'精于计算，擅长后勤', atk:70, int:72, cmd:75, pol:52, chm:50, costGold:400, costPrestige:60, recruitCond:'击败杜伏威', skill:'破釜沉舟', skillDesc:'全体攻击+25%但防御-15%持续3回合', passive:'野心勃勃（威望+15%）', growth:{atk:1,int:1.5,cmd:1.5,pol:1.5,chm:0.5}, favorite:'算盘', expNext:100 },
-  { id:'xueMaoJun', name:'徐茂公', rank:'SS', title:'神机军师', desc:'运筹帷幄，神机妙算', atk:45, int:88, cmd:78, pol:85, chm:62, costGold:400, costPrestige:60, recruitCond:'聚义厅Lv3后来访', skill:'神机妙算', skillDesc:'预知敌方下一回合行动', passive:'阴阳五行（技能效果+20%）', growth:{atk:0.3,int:2.5,cmd:2,pol:2,chm:1}, favorite:'棋盘', expNext:120 },
-  { id:'xueRenGui', name:'薛仁贵', rank:'SSS', title:'白虎星', desc:'名将之后，箭术无双', atk:85, int:65, cmd:82, pol:48, chm:72, costGold:600, costPrestige:200, recruitCond:'击败刘武周', skill:'三箭定天山', skillDesc:'对敌主将造成巨大伤害', passive:'白虎星君（自身攻击+20%）', growth:{atk:3,int:1.5,cmd:2.5,pol:1,chm:1.5}, favorite:'宝弓', expNext:200 },
+  { id:'chengYaoJin', name:'程咬金', rank:'S', title:'福将', desc:'三板斧打天下，豪爽仗义', atk:75, int:45, cmd:70, pol:40, chm:65, costGold:200, costPrestige:0, recruitCond:null, skill:'三板斧', skillDesc:'对敌前排造成120%伤害', passive:'福将（受伤-15%）', growth:{atk:2,int:0.5,cmd:1.5,pol:0.5,chm:1}, favorite:'美酒', expNext:100,
+    talkLines:['哈哈哈，喝酒去！','老程我来了，管他什么妖怪！','三斧子砍下去，神仙也得溜！','主公放心，老程早把家伙什磨好了！'] },
+  { id:'wangBoDang', name:'王伯当', rank:'S', title:'神射手', desc:'忠肝义胆，箭术精湛', atk:72, int:55, cmd:68, pol:48, chm:60, costGold:250, costPrestige:0, recruitCond:null, skill:'百步穿杨', skillDesc:'弓兵攻击+40%持续2回合', passive:'神射手（弓兵暴击+15%）', growth:{atk:1.5,int:1,cmd:1,pol:0.5,chm:1}, favorite:'弓箭', expNext:100,
+    talkLines:['弓在手，箭在弦，何处不可去？','某家的箭，不曾落空。','主公有令，末将听命。','百步穿杨，易如反掌。'] },
+  { id:'qinShuba', name:'秦叔宝（少年）', rank:'S', title:'少年英杰', desc:'少年秦琼，才华初显，可觉醒', atk:65, int:50, cmd:58, pol:40, chm:75, costGold:250, costPrestige:0, recruitCond:null, skill:'年少勇猛', skillDesc:'自身攻击+40%持续2回合', passive:'天赋异禀（经验+30%）', growth:{atk:3,int:2,cmd:2,pol:1.5,chm:2}, favorite:'名剑', expNext:100,
+    talkLines:['在下秦叔宝，愿为主公效命！','总有一天，我要超越父亲！','练剑，练剑，天天练剑！','年少英杰，以后你就知道了！'] },
+  { id:'weizhen', name:'魏徵', rank:'A', title:'谏议大夫', desc:'直言敢谏，以人为镜，政治奇才', atk:35, int:75, cmd:52, pol:88, chm:55, costGold:200, costPrestige:0, recruitCond:'聚义厅Lv2后来访', skill:'直言敢谏', skillDesc:'所有资源临时+20%（一次性）', passive:'兼听则明（商铺收入+20%）', growth:{atk:0.2,int:1.5,cmd:0.8,pol:3,chm:0.5}, favorite:'史书', expNext:100,
+    talkLines:['主公，微臣有一言相劝。','水能载舟，亦能覆舟，望主公三思。','史书记载，明君纳谏方能千秋。','治国如烹小鲜，不可操之过急。'] },
+  { id:'qinQiong', name:'秦琼', rank:'SSS', title:'门神', desc:'隋唐第一猛将，忠义无双', atk:82, int:60, cmd:75, pol:55, chm:78, costGold:300, costPrestige:100, recruitCond:'击败瓦岗寨', skill:'酣战鬼神', skillDesc:'全军攻击+30%持续3回合', passive:'骑兵统帅（骑兵攻击+25%）', growth:{atk:3,int:1.5,cmd:2.5,pol:1.8,chm:1.5}, favorite:'名剑', expNext:150,
+    talkLines:['末将秦叔宝，愿为主公赴汤蹈火！','兄弟们，随我冲！','此战若败，秦某无颜见列祖列宗！','门神守护，谁敢犯我屯兵寨？'] },
+  { id:'danXiongXin', name:'单雄信', rank:'S', title:'飞将', desc:'绿林出身，马上功夫一流', atk:76, int:50, cmd:62, pol:38, chm:58, costGold:350, costPrestige:30, recruitCond:'击败瓦岗寨', skill:'赤发突骑', skillDesc:'骑兵本回合攻击+50%', passive:'桀骜不驯（统率+15%）', growth:{atk:2,int:0.5,cmd:1.5,pol:0.5,chm:1}, favorite:'战马', expNext:100,
+    talkLines:['某家只服强者！','一条赤马，纵横天下！','你能打过我么？','哼，废话少说，放马过来！'] },
+  { id:'peiYuanQing', name:'裴元庆', rank:'SS', title:'银锤太保', desc:'少年猛将，银锤震天下', atk:84, int:42, cmd:65, pol:35, chm:55, costGold:450, costPrestige:50, recruitCond:'击败瓦岗寨，铁匠铺已建', skill:'银锤震天', skillDesc:'对步兵造成150%伤害', passive:'力大无穷（步兵攻击+30%）', growth:{atk:2.5,int:0.3,cmd:1.5,pol:0.3,chm:0.5}, favorite:'铁锤', expNext:120,
+    talkLines:['双锤一响，黄金万两！','让开，别挡我的路！','裴元庆出手，必取敌首！','谁的力气大？就是本太保！'] },
+  { id:'liJing', name:'李靖', rank:'SSS', title:'军神', desc:'用兵如神，兵法大家', atk:68, int:92, cmd:88, pol:75, chm:70, costGold:500, costPrestige:150, recruitCond:'击败王世充', skill:'奇正相生', skillDesc:'敌全属性-20%持续2回合', passive:'兵家至圣（全兵种攻击+15%）', growth:{atk:1,int:3,cmd:2.5,pol:2,chm:1}, favorite:'兵书', expNext:150,
+    talkLines:['用兵之道，在于奇正相生。','知己知彼，百战不殆。','兵无常势，水无常形。','运筹帷幄之中，决胜千里之外。'] },
+  { id:'yuChiGong', name:'尉迟恭', rank:'SS', title:'黑煞神', desc:'铁匠出身，力大无穷', atk:80, int:55, cmd:72, pol:50, chm:68, costGold:400, costPrestige:60, recruitCond:'击败王世充', skill:'铁壁门神', skillDesc:'全军防御+40%持续2回合', passive:'黑煞星（骑兵冲锋+25%）', growth:{atk:2.5,int:0.5,cmd:2,pol:0.5,chm:0.5}, favorite:'良马', expNext:120,
+    talkLines:['主公，末将愿为您冲锋陷阵！','铁锤一挥，管他天兵天将！','敬德在此，谁也别想越雷池一步！','和秦叔宝共守门户，天下太平！'] },
+  { id:'luoCheng', name:'罗成', rank:'SS', title:'冷面寒枪', desc:'白马银枪，少年英雄', atk:78, int:58, cmd:68, pol:42, chm:80, costGold:350, costPrestige:60, recruitCond:'击败窦建德，马厩已建', skill:'回马枪', skillDesc:'反击伤害+100%持续1回合', passive:'冷面寒枪（暴击率+20%）', growth:{atk:2.5,int:1.5,cmd:1.5,pol:0.5,chm:1.5}, favorite:'银枪', expNext:120,
+    talkLines:['...（沉默片刻）末将明白。','白马银枪，所向披靡。','少废话，战场见真章。','回马一枪，取敌首级！'] },
+  { id:'liJi', name:'李勣', rank:'SS', title:'英国公', desc:'文武双全，治国安邦', atk:65, int:82, cmd:85, pol:75, chm:68, costGold:450, costPrestige:80, recruitCond:'击败窦建德', skill:'稳如泰山', skillDesc:'我军不受士气下降影响3回合', passive:'军略大家（全军攻防+10%）', growth:{atk:1,int:2,cmd:2.5,pol:2,chm:1}, favorite:'策论', expNext:120,
+    talkLines:['为将者，当知天时地利人和。','主公之命，末将定当不辱使命。','稳扎稳打，方能常胜。','军心所向，胜败已分。'] },
+  { id:'houJunJi', name:'侯君集', rank:'S', title:'陈国公', desc:'精于计算，擅长后勤', atk:70, int:72, cmd:75, pol:52, chm:50, costGold:400, costPrestige:60, recruitCond:'击败杜伏威', skill:'破釜沉舟', skillDesc:'全体攻击+25%但防御-15%持续3回合', passive:'野心勃勃（威望+15%）', growth:{atk:1,int:1.5,cmd:1.5,pol:1.5,chm:0.5}, favorite:'算盘', expNext:100,
+    talkLines:['算盘打好了，此役必胜！','后勤乃胜战之本，切不可轻视。','主公，属下已为大军备足粮草。','此等功业，足以名垂青史！'] },
+  { id:'xueMaoJun', name:'徐茂公', rank:'SS', title:'神机军师', desc:'运筹帷幄，神机妙算', atk:45, int:88, cmd:78, pol:85, chm:62, costGold:400, costPrestige:60, recruitCond:'聚义厅Lv3后来访', skill:'神机妙算', skillDesc:'预知敌方下一回合行动，减免伤害30%', passive:'阴阳五行（技能效果+20%）', growth:{atk:0.3,int:2.5,cmd:2,pol:2,chm:1}, favorite:'棋盘', expNext:120,
+    talkLines:['天机不可泄露，但主公且听茂公一言。','如此局势，当以静制动。','棋盘之上，已见胜负。','运筹帷幄之中，决胜千里之外。'] },
+  { id:'xueRenGui', name:'薛仁贵', rank:'SSS', title:'白虎星', desc:'名将之后，箭术无双', atk:85, int:65, cmd:82, pol:48, chm:72, costGold:600, costPrestige:200, recruitCond:'击败刘武周', skill:'三箭定天山', skillDesc:'对敌主将造成巨大伤害，必中', passive:'白虎星君（自身攻击+20%）', growth:{atk:3,int:1.5,cmd:2.5,pol:1,chm:1.5}, favorite:'宝弓', expNext:200,
+    talkLines:['白虎星降世，天下谁人能敌！','三箭定天山，百发百中！','征战沙场，乃我薛仁贵之本命！','主公，末将请令出征！'] },
+]
+
+// ============================================================
+// 武将羁绊系统（双人组合 + 三人桃园）
+// ============================================================
+const HERO_BONDS = [
+  // 双人组合技（7对）
+  {
+    id:'gate_gods', name:'门神守护', type:'duo',
+    members:['qinQiong','yuChiGong'],
+    condition:'队中同时有秦琼和尉迟恭',
+    combatDesc:'全军防御+30%，每回合额外恢复5%HP',
+    bonusType:'defense', bonusVal:0.30, hpRegen:0.05
+  },
+  {
+    id:'twin_hammers', name:'金锤银锤', type:'duo',
+    members:['peiYuanQing','yuChiGong'],
+    condition:'队中同时有裴元庆和尉迟恭',
+    combatDesc:'步兵和骑兵攻击+35%，克制重甲',
+    bonusType:'heavy_atk', bonusVal:0.35
+  },
+  {
+    id:'qin_dan', name:'瓦岗双雄', type:'duo',
+    members:['qinQiong','danXiongXin'],
+    condition:'队中同时有秦琼和单雄信',
+    combatDesc:'骑兵攻击+40%，冲锋伤害翻倍',
+    bonusType:'cavalry_atk', bonusVal:0.40
+  },
+  {
+    id:'li_xu', name:'军神谋士', type:'duo',
+    members:['liJing','xueMaoJun'],
+    condition:'队中同时有李靖和徐茂公',
+    combatDesc:'全军攻击+20%，每回合敌方士气-8',
+    bonusType:'atk_morale', bonusVal:0.20, moraleDrain:8
+  },
+  {
+    id:'youth_pledge', name:'少年立志', type:'duo',
+    members:['qinShuba','luoCheng'],
+    condition:'队中同时有少年秦叔宝和罗成',
+    combatDesc:'全体武将属性+15%，经验获取+30%',
+    bonusType:'hero_stat', bonusVal:0.15, expBonus:0.30
+  },
+  {
+    id:'wei_xu', name:'文臣辅弼', type:'duo',
+    members:['weizhen','xueMaoJun'],
+    condition:'队中同时有魏徵和徐茂公',
+    combatDesc:'全军不受士气下降影响，每日额外产出提升10%',
+    bonusType:'morale_immune', prodBonus:0.10
+  },
+  {
+    id:'arrow_masters', name:'箭神传承', type:'duo',
+    members:['wangBoDang','xueRenGui'],
+    condition:'队中同时有王伯当和薛仁贵',
+    combatDesc:'弓兵攻击+50%，必定触发武将技能',
+    bonusType:'archer_atk', bonusVal:0.50, guaranteeSkill:true
+  },
+  // 三人桃园之义（4组）
+  {
+    id:'wagang_trio', name:'瓦岗三杰', type:'trio',
+    members:['qinQiong','danXiongXin','peiYuanQing'],
+    condition:'同时拥有秦琼、单雄信、裴元庆',
+    combatDesc:'全军攻击+40%，步兵和骑兵HP+30%，瓦岗旧义（士气始终为100）',
+    bonusType:'wagang_glory', bonusVal:0.40
+  },
+  {
+    id:'tang_vanguard', name:'唐营双柱', type:'trio',
+    members:['liJing','yuChiGong','qinQiong'],
+    condition:'同时拥有李靖、尉迟恭、秦琼',
+    combatDesc:'全军攻守+25%，必定先手，不败之姿（首回合无法被击退）',
+    bonusType:'tang_glory', bonusVal:0.25
+  },
+  {
+    id:'civil_trio', name:'文武全才', type:'trio',
+    members:['weizhen','xueMaoJun','liJi'],
+    condition:'同时拥有魏徵、徐茂公、李勣',
+    combatDesc:'每日钱粮产出+20%，全军攻防+15%，每回合恢复士气+10',
+    bonusType:'civil_glory', bonusVal:0.15, prodBonus:0.20
+  },
+  {
+    id:'invincible_trio', name:'天下无敌', type:'trio',
+    members:['qinQiong','liJing','xueRenGui'],
+    condition:'同时拥有秦琼、李靖、薛仁贵',
+    combatDesc:'全军攻击+50%，暴击率+30%，天降神兵（战场必触发全体武将技能）',
+    bonusType:'invincible', bonusVal:0.50
+  },
+]
+
+// ============================================================
+// 成就系统（35个）
+// ============================================================
+const ACHIEVE_CATS = [
+  { id:'manage', name:'经营成就', icon:'🏗' },
+  { id:'combat', name:'战斗成就', icon:'⚔' },
+  { id:'explore', name:'探索成就', icon:'🗺' },
+  { id:'hero', name:'武将成就', icon:'👥' },
+  { id:'hidden', name:'隐藏成就', icon:'🔮' },
+]
+
+const ACHIEVEMENTS = [
+  // 经营成就（8个）
+  { id:'first_build', cat:'manage', name:'草创基业', desc:'建造第一座建筑', reward:'钱币+100', hidden:false },
+  { id:'all_build', cat:'manage', name:'建设大业', desc:'建造全部13种建筑', reward:'威望+100', hidden:false },
+  { id:'guildhall_max', cat:'manage', name:'雄霸一方', desc:'聚义厅升至5级', reward:'人口+20，每日威望+3', hidden:false },
+  { id:'rich_100k', cat:'manage', name:'万贯家财', desc:'钱币同时达到100000', reward:'商业加成+10%', hidden:false },
+  { id:'food_50k', cat:'manage', name:'粮草丰盈', desc:'粮食同时达到50000', reward:'军队训练费-10%', hidden:false },
+  { id:'full_tech', cat:'manage', name:'科技兴寨', desc:'解锁所有科技至满级', reward:'全军属性+5%', hidden:false },
+  { id:'loyal_90', cat:'manage', name:'民心所向', desc:'民忠达到90以上', reward:'人口自然增长翻倍', hidden:false },
+  { id:'pop_200', cat:'manage', name:'人丁兴旺', desc:'人口达到200', reward:'建筑产出+10%', hidden:false },
+  // 战斗成就（8个）
+  { id:'first_victory', cat:'combat', name:'初试锋芒', desc:'首次击败一个势力', reward:'威望+30', hidden:false },
+  { id:'half_factions', cat:'combat', name:'中原逐鹿', desc:'击败至少4个势力', reward:'全军攻击+10%', hidden:false },
+  { id:'all_factions', cat:'combat', name:'一统天下', desc:'击败全部7个势力', reward:'触发最终结局', hidden:false },
+  { id:'power_5000', cat:'combat', name:'雄师百万', desc:'战力达到5000', reward:'骑兵攻击+15%', hidden:false },
+  { id:'troop_500', cat:'combat', name:'精兵强将', desc:'总兵力达到500人', reward:'训练效率+20%', hidden:false },
+  { id:'no_damage_win', cat:'combat', name:'以一敌百', desc:'我方HP不低于80%赢得一场战斗', reward:'全军防御+10%', hidden:false },
+  { id:'all_troop_types', cat:'combat', name:'兵种齐全', desc:'同时拥有4种兵种各50人以上', reward:'兵种克制效果+20%', hidden:false },
+  { id:'win_weather', cat:'combat', name:'风雨无阻', desc:'在暴雨或暴雪天气中赢得战斗', reward:'恶劣天气战斗减益-20%', hidden:false },
+  // 探索成就（7个）
+  { id:'first_explore', cat:'explore', name:'问鼎四方', desc:'探索除太原以外第一个地点', reward:'行动点+1', hidden:false },
+  { id:'all_explore', cat:'explore', name:'踏遍山河', desc:'探索全部10个地点', reward:'每日行动点+2', hidden:false },
+  { id:'silk_road', cat:'explore', name:'西域奇珍', desc:'到达丝路起点', reward:'资源获取+15%', hidden:false },
+  { id:'wuling', cat:'explore', name:'深山问道', desc:'探索五岭山脉', reward:'随机获得一项科技研究', hidden:false },
+  { id:'traveler', cat:'explore', name:'千里征途', desc:'累计消耗行动点达到100', reward:'行动点恢复+1/日', hidden:false },
+  { id:'treasure', cat:'explore', name:'寻宝奇缘', desc:'通过探索获得宝藏5次', reward:'探索发现宝藏概率+20%', hidden:false },
+  { id:'map_all', cat:'explore', name:'山河尽览', desc:'解锁大地图所有地点', reward:'威望+50', hidden:false },
+  // 武将成就（7个）
+  { id:'first_hero', cat:'hero', name:'英雄归心', desc:'招募第一位武将', reward:'招募费-10%', hidden:false },
+  { id:'all_heroes', cat:'hero', name:'群英荟萃', desc:'招募全部14位武将', reward:'武将技能效果+20%', hidden:false },
+  { id:'hero_max_level', cat:'hero', name:'绝世神功', desc:'任一武将升至20级', reward:'该武将属性+10%', hidden:false },
+  { id:'bond_2', cat:'hero', name:'义结金兰', desc:'激活2个武将羁绊', reward:'羁绊效果+10%', hidden:false },
+  { id:'bond_all', cat:'hero', name:'群英列阵', desc:'激活全部11个武将羁绊', reward:'战斗中所有羁绊效果翻倍', hidden:false },
+  { id:'hero_loyalty100', cat:'hero', name:'忠心耿耿', desc:'任一武将忠诚度达到100', reward:'武将不会叛逃', hidden:false },
+  { id:'hero_affection100', cat:'hero', name:'引为知己', desc:'任一武将好感度达到100', reward:'好感满的武将技能必触发', hidden:false },
+  // 隐藏成就（5个）
+  { id:'secret_weizhen', cat:'hidden', name:'贤臣来投', desc:'魏徵主动来访并成功招募', reward:'政治效率提升20%', hidden:true },
+  { id:'secret_xu', cat:'hidden', name:'军师驾到', desc:'徐茂公主动来访并成功招募', reward:'战斗预判能力提升', hidden:true },
+  { id:'secret_festival', cat:'hidden', name:'岁时佳节', desc:'经历全部4个节日庆典', reward:'节日期间产出+30%', hidden:true },
+  { id:'secret_dynasty', cat:'hidden', name:'开国之君', desc:'选择开创新朝结局', reward:'解锁新游戏+模式', hidden:true },
+  { id:'secret_retire', cat:'hidden', name:'功成身退', desc:'选择归隐山林结局', reward:'解锁悠哉模式', hidden:true },
 ]
 
 const TROOP_TYPES = {
@@ -521,23 +756,45 @@ const TECH_DEFS = [
     effects:['未研究','农田产出+10%','粮食消耗-5%，季节减产-20%','丰收概率+15%，仓储上限+50%','灾害影响-30%','可一年三熟，农田全产出翻倍'] },
 ]
 
+// ============================================================
+// 扩展随机事件池（30种）
+// ============================================================
 const RANDOM_EVENTS = [
-  // 经营类
+  // 经济类（10种）
   { id:'merchant', type:'economy', text:'一队商旅经过屯兵寨，希望能在此休憩。', options:['热情接待（钱+150，威望+5）','婉拒（无影响）'], effect:[{gold:150,prestige:5},{}] },
-  { id:'refugee', type:'economy', text:'一批难民来到寨门，求收留庇护。', options:['收留（人口+8，粮食-100）','拒绝（无影响，但民忠-3）'], effect:[{population:8,food:-100},{loyalty:-3}] },
-  { id:'harvest', type:'economy', text:'今年风调雨顺，农田大丰收！', options:['继续生产'], effect:[{food:200}] },
+  { id:'refugee', type:'economy', text:'一批难民来到寨门，求收留庇护。', options:['收留（人口+8，粮食-100）','拒绝（民忠-3）'], effect:[{population:8,food:-100},{loyalty:-3}] },
+  { id:'harvest', type:'economy', text:'今年风调雨顺，农田大丰收！', options:['大力庆贺（威望+10）'], effect:[{food:200,prestige:10}] },
+  { id:'trade_convoy', type:'economy', text:'一支来自西域的商队希望与你贸易。', options:['慷慨交易（金-200，换取铁矿+100木材+80）','小额交易（金-80，铁矿+30）'], effect:[{gold:-200,iron:100,wood:80},{gold:-80,iron:30}] },
+  { id:'tax_season', type:'economy', text:'周边村庄主动缴纳保护费，表示愿意归附。', options:['收纳（金+300，威望+15）','婉拒（民忠+5）'], effect:[{gold:300,prestige:15},{loyalty:5}] },
+  { id:'architect', type:'economy', text:'一名能工巧匠来到寨中，声称可缩短建造时间。', options:['重金雇用（金-300，下一建筑工期减半）','感谢送别'], effect:[{gold:-300,build_speed:1},{}] },
+  { id:'lost_treasure', type:'economy', text:'一名农民在田间挖出了一坛埋藏已久的铜钱！', options:['充入军费（金+400）','赏赐农民（金+200，民忠+5）'], effect:[{gold:400},{gold:200,loyalty:5}] },
+  { id:'silk_route', type:'economy', text:'丝绸之路商队路过，带来了大量丝绸和香料。', options:['购入囤货（金-150，下一笔金收入×2）','以木材换取（木-80，金+200）'], effect:[{gold:-150,trade_buff:1},{wood:-80,gold:200}] },
+  { id:'market_boom', type:'economy', text:'近日市集繁盛，布庄和酒肆生意格外好。', options:['趁机扩大经营（金+500）'], effect:[{gold:500}] },
   { id:'drought', type:'disaster', text:'旱灾来袭！农田减产，粮食告急！', options:['紧急抗旱（钱-200，减少损失）','任其自然（粮食-300）'], effect:[{gold:-200,food:-100},{food:-300}] },
-  { id:'fire', type:'disaster', text:'营地发生火灾，部分设施受损！', options:['立即救援（木材-50，恢复设施）','弃之不管（损失翻倍）'], effect:[{wood:-50},{prestige:-10}] },
-  { id:'spy', type:'military', text:'发现敌方奸细在营中探查！', options:['严刑审讯（获得情报，威望+10）','秘密处决（安全，无信息）'], effect:[{prestige:10},{security:1}] },
-  { id:'bandit_raid', type:'military', text:'一伙山贼趁夜劫营！', options:['奋起抵抗（损失部分步兵）','贿赂打发（金-200）'], effect:[{infantry_loss:5},{gold:-200}] },
-  { id:'horse_trader', type:'military', text:'一名马贩子带着精良战马前来出售。', options:['购买（金-400，骑兵战力+10%持续30日）','拒绝'], effect:[{gold:-400,cavalry_buff:30},{}] },
-  { id:'old_soldier', type:'hero', text:'一名老将军途经此地，对你的寨子颇感兴趣。', options:['盛情留下（金-300，获得随机A级武将）','敬而送别（威望+5）'], effect:[{gold:-300,rand_hero:'A'},{prestige:5}] },
-  { id:'hero_challenge', type:'hero', text:'一名壮士前来挑战，武艺不凡！', options:['迎接挑战（胜则+1英雄好感，败则损兵）','礼让（威望+3）'], effect:[{hero_affection:5},{prestige:3}] },
-  { id:'ghost_army', type:'military', text:'夜间哨兵发现远处有军队在移动，但来不及确认。', options:['派兵侦查（花费行动点，获情报）','加强戒备（防御+10%持续3日）'], effect:[{action_point:-1},{defense_buff:3}] },
-  { id:'lucky_find', type:'explore', text:'探查附近山林，发现了一处隐藏的矿脉！', options:['立即开采（铁矿+150）'], effect:[{iron:150}] },
-  { id:'ancient_relic', type:'explore', text:'在古战场遗址发现了一件锈迹斑斑的兵器。', options:['带回研究（威望+20，解锁特殊配方）','留在原地'], effect:[{prestige:20},{} ] },
+  // 灾害类（5种）
+  { id:'fire', type:'disaster', text:'营地发生火灾，部分设施受损！', options:['立即救援（木材-50，恢复设施）','弃之不管（威望-10）'], effect:[{wood:-50},{prestige:-10}] },
   { id:'epidemic', type:'disaster', text:'营中暴发疫病，兵士大批减员！', options:['高价请医（金-500，减少损失50%）','隔离处理（人口-10）'], effect:[{gold:-500,population_loss:5},{population_loss:10}] },
+  { id:'mountain_slide', type:'disaster', text:'山体滑坡阻断了运输通道，木材短缺！', options:['组织清理（人口-5日工，木材-20）','绕道运输（金-150）'], effect:[{population_loss:2,wood:-20},{gold:-150}] },
+  { id:'locust', type:'disaster', text:'蝗虫来袭，农田大片受损！', options:['奋力扑灭（金-100，食物-100）','放任不管（食物-400）'], effect:[{gold:-100,food:-100},{food:-400}] },
+  { id:'bandit_raid', type:'military', text:'一伙山贼趁夜劫营！', options:['奋起抵抗（损失部分步兵）','贿赂打发（金-200）'], effect:[{infantry_loss:5},{gold:-200}] },
+  // 军事类（5种）
+  { id:'spy', type:'military', text:'发现敌方奸细在营中探查！', options:['严刑审讯（获得情报，威望+10）','秘密处决（安全，无信息）'], effect:[{prestige:10},{}] },
+  { id:'horse_trader', type:'military', text:'一名马贩子带着精良战马前来出售。', options:['购买（金-400，骑兵战力+10%持续30日）','拒绝'], effect:[{gold:-400,cavalry_buff:30},{}] },
+  { id:'ghost_army', type:'military', text:'夜间哨兵发现远处有军队在移动！', options:['派兵侦查（获情报，威望+5）','加强戒备（防御+10%持续3日）'], effect:[{prestige:5},{defense_buff:3}] },
+  { id:'defector', type:'military', text:'一队200名敌军士兵投诚，愿意归降！', options:['接收（步兵+50，粮食-200）','拒绝（威望+5）'], effect:[{infantry_add:50,food:-200},{prestige:5}] },
+  { id:'weapon_cache', type:'military', text:'搜查附近发现了一批遗弃的武器仓库！', options:['运回武装军队（铁矿+80，金+50）'], effect:[{iron:80,gold:50}] },
+  // 武将类（5种）
+  { id:'old_soldier', type:'hero', text:'一名老将军途经此地，对你的寨子颇感兴趣。', options:['盛情留下（金-300，获得随机A级武将）','敬而送别（威望+5）'], effect:[{gold:-300,rand_hero:'A'},{prestige:5}] },
+  { id:'hero_challenge', type:'hero', text:'一名壮士前来挑战，武艺不凡！', options:['迎接挑战（胜则威望+15）','礼让（威望+3）'], effect:[{prestige:15},{prestige:3}] },
+  { id:'hero_conflict', type:'hero', text:'你的武将之间发生了争执，影响军心！', options:['公正调解（需要1名政治武将，忠诚+5）','严厉惩处（忠诚-5）'], effect:[{loyalty:5,hero_loyalty:5},{loyalty:-5}] },
+  { id:'training_accident', type:'hero', text:'练兵时发生意外，一名武将轻伤！', options:['立即救治（金-100，武将恢复快）','让其休养（武将2日内无法出战）'], effect:[{gold:-100},{} ] },
+  { id:'hero_inspiration', type:'hero', text:'一名武将在苦练中顿悟，能力大增！', options:['举寨庆贺（威望+10）'], effect:[{prestige:10,hero_level_up:1}] },
+  // 自然探索类（5种）
+  { id:'lucky_find', type:'explore', text:'探查附近山林，发现了一处隐藏的矿脉！', options:['立即开采（铁矿+150）'], effect:[{iron:150}] },
+  { id:'ancient_relic', type:'explore', text:'在古战场遗址发现了一件锈迹斑斑的兵器。', options:['带回研究（威望+20，解锁特殊配方）','留在原地'], effect:[{prestige:20},{}] },
   { id:'good_weather', type:'nature', text:'连日好天气，寨中众人干劲十足！', options:['鼓励生产（全产出+20%持续5日）'], effect:[{prod_buff:5}] },
+  { id:'hermit', type:'explore', text:'发现了一位隐居的老人，自称精通奇门遁甲。', options:['诚心拜师（金-200，随机升级一项科技）','礼貌告辞'], effect:[{gold:-200,rand_tech:1},{}] },
+  { id:'wild_horses', type:'explore', text:'附近山野中发现了一群野马！', options:['派人捕捉（骑兵+20）','放任自然（威望+3）'], effect:[{cavalry_add:20},{prestige:3}] },
 ]
 
 // ============================================================
@@ -548,6 +805,7 @@ const app = createApp({
     const storyBody = ref(null)
     const activeTab = ref('village')
     const modal = reactive({ show:false, title:'', body:'', confirm:null })
+    const achieveToast = reactive({ show:false, name:'', desc:'' })
 
     // 核心游戏状态
     const gs = reactive({
@@ -568,13 +826,18 @@ const app = createApp({
       story: [],
       options: [],
       combatState: null,
+      achievements: [],          // 已解锁成就ID列表
+      totalExploreCount: 0,      // 累计探索宝藏次数
+      totalTravelPoints: 0,      // 累计消耗行动点
+      festivalsExperienced: [],  // 经历的节日ID列表
+      festivalCount: 0,          // 经历节日数量
     })
 
     // 战斗状态
     const combat = reactive({
       active: false,
       factionId: null,
-      phase: '',  // 'pre','fighting','result'
+      phase: '',
       round: 0,
       allyHp: 0, allyMaxHp: 0,
       enemyHp: 0, enemyMaxHp: 0,
@@ -585,7 +848,6 @@ const app = createApp({
     const trainCount = reactive({ infantry:5, archers:5, musketeers:3, cavalry:3 })
 
     const hasSave = computed(() => !!localStorage.getItem('stjyc_v1'))
-
     const totalTroops = computed(() => Object.values(gs.troops).reduce((a,b)=>a+b,0))
 
     const myPower = computed(() => {
@@ -593,6 +855,9 @@ const app = createApp({
       p += gs.heroes.length * 20
       const milTech = gs.tech['infantry_tech'] || 0
       p = Math.floor(p * (1 + milTech * 0.08))
+      // 羁绊加成
+      const bondBonus = getBondPowerBonus()
+      p = Math.floor(p * (1 + bondBonus))
       return p
     })
 
@@ -603,10 +868,16 @@ const app = createApp({
       return MAP_LOCATIONS.filter(loc => {
         if (loc.id === 'taiyuan') return false
         if (explored.includes(loc.id)) return true
-        // 相邻已探索区域才显示
         return loc.distance <= (Math.max(...MAP_LOCATIONS.filter(l=>explored.includes(l.id)).map(l=>l.distance||0)) + 2)
       })
     })
+
+    // 激活的羁绊
+    const activeHeroBonds = computed(() => {
+      const heroIds = gs.heroes.map(h=>h.id)
+      return HERO_BONDS.filter(bond => bond.members.every(mid => heroIds.includes(mid)))
+    })
+    const activeBondsCount = computed(() => activeHeroBonds.value.length)
 
     // ---- 工具函数 ----
     function fmt(n) { return n >= 10000 ? (n/10000).toFixed(1)+'万' : n >= 1000 ? Math.floor(n/1000)+'k' : String(n) }
@@ -614,7 +885,7 @@ const app = createApp({
     function addStory(text, type='narrate') {
       if (text === '---') { gs.story.push({ text:'─'.repeat(30), type:'divider' }); return }
       gs.story.push({ text, type })
-      if (gs.story.length > 200) gs.story.splice(0, 50)
+      if (gs.story.length > 250) gs.story.splice(0, 50)
       nextTick(() => { if (storyBody.value) storyBody.value.scrollTop = storyBody.value.scrollHeight })
     }
 
@@ -632,11 +903,149 @@ const app = createApp({
       modal.title = title; modal.body = body; modal.confirm = fn; modal.show = true
     }
 
+    // ---- 成就系统 ----
+    function unlockAchieve(id) {
+      if (gs.achievements.includes(id)) return
+      const ach = ACHIEVEMENTS.find(a=>a.id===id)
+      if (!ach) return
+      gs.achievements.push(id)
+      addStory(`🏆 成就解锁：【${ach.name}】`, 'achieve')
+      // 成就 Toast 通知
+      achieveToast.name = ach.name
+      achieveToast.desc = ach.desc
+      achieveToast.show = true
+      setTimeout(()=>{ achieveToast.show = false }, 4000)
+      // 应用成就奖励
+      applyAchieveReward(id)
+    }
+
+    function applyAchieveReward(id) {
+      if (id==='first_build') gs.gold += 100
+      if (id==='guildhall_max') { gs.population += 20 }
+      if (id==='loyal_90') { /* 已在建筑加成中体现 */ }
+      if (id==='first_explore') gs.actionPoints = Math.min(12, gs.actionPoints + 1)
+      if (id==='traveler') { /* 记录加成 */ }
+      if (id==='first_hero') { gs.gold = Math.floor(gs.gold * 1.05) }
+      if (id==='secret_weizhen'||id==='secret_xu') { /* 效果在政治产出中体现 */ }
+    }
+
+    function checkAchievements() {
+      // 经营成就
+      if (gs.buildings.length >= 1) unlockAchieve('first_build')
+      if (gs.buildings.length >= 13) unlockAchieve('all_build')
+      if (bldLevel('guildhall') >= 5) unlockAchieve('guildhall_max')
+      if (gs.gold >= 100000) unlockAchieve('rich_100k')
+      if (gs.food >= 50000) unlockAchieve('food_50k')
+      if (gs.loyalty >= 90) unlockAchieve('loyal_90')
+      if (gs.population >= 200) unlockAchieve('pop_200')
+      const allTechMax = TECH_DEFS.every(t=>(gs.tech[t.id]||0)>=t.maxLvl)
+      if (allTechMax) unlockAchieve('full_tech')
+      // 战斗成就
+      const realDefeated = gs.defeatedFactions.filter(f=>!f.startsWith('_'))
+      if (realDefeated.length >= 1) unlockAchieve('first_victory')
+      if (realDefeated.length >= 4) unlockAchieve('half_factions')
+      if (realDefeated.length >= 7) unlockAchieve('all_factions')
+      if (myPower.value >= 5000) unlockAchieve('power_5000')
+      if (totalTroops.value >= 500) unlockAchieve('troop_500')
+      // 兵种齐全
+      if (gs.troops.infantry>=50 && gs.troops.archers>=50 && gs.troops.musketeers>=50 && gs.troops.cavalry>=50) unlockAchieve('all_troop_types')
+      // 探索成就
+      if (gs.exploredLocations.length >= 2) unlockAchieve('first_explore')
+      if (gs.exploredLocations.length >= 10) unlockAchieve('all_explore')
+      if (gs.exploredLocations.includes('silk_road')) unlockAchieve('silk_road')
+      if (gs.exploredLocations.includes('wuling')) unlockAchieve('wuling')
+      if (gs.totalTravelPoints >= 100) unlockAchieve('traveler')
+      if (gs.totalExploreCount >= 5) unlockAchieve('treasure')
+      if (gs.exploredLocations.length >= MAP_LOCATIONS.length) unlockAchieve('map_all')
+      // 武将成就
+      if (gs.heroes.length >= 1) unlockAchieve('first_hero')
+      if (gs.heroes.length >= 14) unlockAchieve('all_heroes')
+      const maxHero = gs.heroes.find(h=>h.level>=20)
+      if (maxHero) unlockAchieve('hero_max_level')
+      if (activeBondsCount.value >= 2) unlockAchieve('bond_2')
+      if (activeBondsCount.value >= HERO_BONDS.length) unlockAchieve('bond_all')
+      const loyal100 = gs.heroes.find(h=>h.loyalty>=100)
+      if (loyal100) unlockAchieve('hero_loyalty100')
+      const affection100 = gs.heroes.find(h=>(h.affection||0)>=100)
+      if (affection100) unlockAchieve('hero_affection100')
+      // 节日成就
+      if ((gs.festivalsExperienced||[]).length >= 4) unlockAchieve('secret_festival')
+    }
+
+    // ---- 羁绊系统 ----
+    function isBondActive(bond) {
+      const heroIds = gs.heroes.map(h=>h.id)
+      return bond.members.every(mid=>heroIds.includes(mid))
+    }
+
+    function getHeroBondTags(heroId) {
+      return HERO_BONDS.filter(bond=>bond.members.includes(heroId)).map(bond=>({
+        id: bond.id,
+        name: bond.name,
+        active: isBondActive(bond)
+      }))
+    }
+
+    function getBondPowerBonus() {
+      let bonus = 0
+      for (const bond of activeHeroBonds.value) {
+        if (bond.bonusVal) bonus += bond.bonusVal * 0.3 // 战力加成折算
+      }
+      return bonus
+    }
+
+    function getBondCombatBonus() {
+      // 返回战斗时的综合加成倍率
+      let atkBonus = 0, defBonus = 0
+      let guaranteeSkill = false
+      let moraleImmune = false
+      let moraleExtra = 0
+
+      for (const bond of activeHeroBonds.value) {
+        switch(bond.bonusType) {
+          case 'defense': defBonus += bond.bonusVal; break
+          case 'heavy_atk': atkBonus += bond.bonusVal * 0.6; break
+          case 'cavalry_atk': atkBonus += bond.bonusVal * 0.4; break
+          case 'atk_morale': atkBonus += bond.bonusVal; moraleExtra += (bond.moraleDrain||0); break
+          case 'hero_stat': atkBonus += bond.bonusVal * 0.5; break
+          case 'morale_immune': moraleImmune = true; break
+          case 'archer_atk': atkBonus += bond.bonusVal * 0.4; guaranteeSkill = bond.guaranteeSkill || guaranteeSkill; break
+          case 'wagang_glory': atkBonus += bond.bonusVal; defBonus += 0.3; break
+          case 'tang_glory': atkBonus += bond.bonusVal; defBonus += bond.bonusVal; break
+          case 'civil_glory': atkBonus += bond.bonusVal; defBonus += bond.bonusVal; moraleExtra += 10; break
+          case 'invincible': atkBonus += bond.bonusVal; guaranteeSkill = true; break
+        }
+      }
+      return { atkBonus, defBonus, guaranteeSkill, moraleImmune, moraleExtra }
+    }
+
+    function getBondCombatSummary() {
+      const { atkBonus, defBonus } = getBondCombatBonus()
+      const parts = []
+      if (atkBonus > 0) parts.push(`攻击+${Math.floor(atkBonus*100)}%`)
+      if (defBonus > 0) parts.push(`防御+${Math.floor(defBonus*100)}%`)
+      for (const b of activeHeroBonds.value) {
+        if (b.bonusType === 'morale_immune') parts.push('士气免疫')
+        if (b.bonusType === 'archer_atk' && b.guaranteeSkill) parts.push('必触发技能')
+      }
+      return parts.join('，') || '激活中'
+    }
+
+    function getBondProdBonus() {
+      // 生产加成（文臣辅弼、文武全才）
+      let bonus = 0
+      for (const bond of activeHeroBonds.value) {
+        if (bond.prodBonus) bonus += bond.prodBonus
+      }
+      return bonus
+    }
+
     // ---- 建筑系统 ----
     function hasBld(id) { return !!gs.buildings.find(b=>b.id===id) }
     function bldLevel(id) { const b = gs.buildings.find(b=>b.id===id); return b ? b.level : 0 }
     function getBldName(id) { const b = gs.buildings.find(b=>b.id===id); return b ? b.name : '未知' }
     function getBldNameById(id) { const d = BLD_DEFS.find(b=>b.id===id); return d ? d.name : id }
+    function getHeroName(id) { const h = gs.heroes.find(h=>h.id===id); return h ? h.name : '未知' }
 
     function isUnlocked(bldDef) {
       if (bldDef.unlockFaction && !gs.defeatedFactions.includes(bldDef.unlockFaction)) return false
@@ -659,9 +1068,20 @@ const app = createApp({
       if (!def || !isUnlocked(def) || hasBld(bldId)) return
       if (!canBuildNew(def)) { addStory('资源不足，无法建造！', 'warning'); return }
       gs.gold -= def.costGold; gs.wood -= (def.costWood||0); gs.iron -= (def.costIron||0)
-      gs.buildings.push({ id:def.id, name:def.name, icon:def.icon, level:1, assignedHero:null, underConstruction:false, constructDays:0, outputType:def.outputType, baseOutput:def.baseOutput||0 })
+      const days = def.buildDays || 0
+      gs.buildings.push({
+        id:def.id, name:def.name, icon:def.icon, level:1,
+        assignedHero:null,
+        underConstruction: days > 0,
+        constructDays: days,
+        constructMaxDays: days,
+        outputType:def.outputType,
+        baseOutput:def.baseOutput||0
+      })
       activeTab.value = 'village'
-      addStory(`建造了【${def.name}】！`, 'reward')
+      if (days > 0) addStory(`开始建造【${def.name}】，需要${days}日完工。`, 'system')
+      else addStory(`建造了【${def.name}】！`, 'reward')
+      checkAchievements()
     }
 
     function getBldUpgradeCost(bldId) {
@@ -673,6 +1093,13 @@ const app = createApp({
       return { gold: Math.floor(def.costGold * mult), wood: Math.floor((def.costWood||0)*mult), iron: Math.floor((def.costIron||0)*mult) }
     }
 
+    function getBldUpgradeDays(bldId) {
+      const b = gs.buildings.find(b=>b.id===bldId)
+      if (!b) return 1
+      const def = BLD_DEFS.find(d=>d.id===bldId)
+      return Math.max(1, (def?.buildDays||1) + b.level - 1)
+    }
+
     function canUpgradeBld(bldId) {
       const cost = getBldUpgradeCost(bldId)
       if (!cost) return false
@@ -682,13 +1109,34 @@ const app = createApp({
     function upgradeBld(bldId) {
       const b = gs.buildings.find(b=>b.id===bldId)
       if (!b || b.level >= 5) { addStory('已达最高等级！', 'warning'); return }
+      if (b.underConstruction) { addStory('该建筑正在建造中！', 'warning'); return }
       if (!canUpgradeBld(bldId)) { addStory('资源不足！', 'warning'); return }
       const cost = getBldUpgradeCost(bldId)
       gs.gold -= cost.gold; gs.wood -= cost.wood; gs.iron -= cost.iron
-      b.level++
-      addStory(`【${b.name}】升级到Lv.${b.level}！`, 'reward')
-      // 聚义厅升级触发武将来访
-      if (bldId === 'guildhall') checkAutoHeroVisit()
+      const days = getBldUpgradeDays(bldId)
+      b.underConstruction = true
+      b.constructDays = days
+      b.constructMaxDays = days
+      addStory(`【${b.name}】开始升级，需要${days}日完工。`, 'system')
+    }
+
+    function checkBldComplete(b) {
+      // 建筑完工检查（在日推进中调用）
+      if (!b.underConstruction) return
+      b.constructDays--
+      if (b.constructDays <= 0) {
+        b.underConstruction = false
+        b.constructDays = 0
+        // 判断是新建还是升级
+        if (b.level === 1 && b.constructMaxDays === (BLD_DEFS.find(d=>d.id===b.id)?.buildDays||0)) {
+          addStory(`【${b.name}】建造完成！`, 'reward')
+        } else {
+          b.level++
+          addStory(`【${b.name}】升级完成！当前Lv.${b.level}`, 'reward')
+          if (b.id === 'guildhall') checkAutoHeroVisit()
+          checkAchievements()
+        }
+      }
     }
 
     function getBldEffect(b) {
@@ -711,12 +1159,14 @@ const app = createApp({
     function assignHeroToBld(bldId) {
       const b = gs.buildings.find(b=>b.id===bldId)
       if (!b) return
-      const opts = [{ text:'取消（武将待命）', action:()=>{ if(b.assignedHero){const h=gs.heroes.find(h=>h.id===b.assignedHero);if(h)h.assignedTo=null;b.assignedHero=null;addStory(`取消了${b.name}的武将分配。`,'system')} } }]
+      const opts = [{ text:'取消（武将待命）', action:()=>{
+        if (b.assignedHero) { const h=gs.heroes.find(h=>h.id===b.assignedHero); if(h) h.assignedTo=null; b.assignedHero=null; addStory(`取消了${b.name}的武将分配。`,'system') }
+      }}]
       for (const h of gs.heroes) {
         opts.push({ text:`${h.name}（武${Math.floor(h.atk)} 政${Math.floor(h.pol)}）`, style:'primary', action:()=>{
           const oldBld = gs.buildings.find(ob=>ob.assignedHero===h.id)
-          if (oldBld) { oldBld.assignedHero = null }
-          if (b.assignedHero) { const oh = gs.heroes.find(oh=>oh.id===b.assignedHero); if(oh) oh.assignedTo=null }
+          if (oldBld) oldBld.assignedHero = null
+          if (b.assignedHero) { const oh=gs.heroes.find(oh=>oh.id===b.assignedHero); if(oh) oh.assignedTo=null }
           b.assignedHero = h.id; h.assignedTo = bldId
           addStory(`${h.name}已分配至【${b.name}】。`, 'system')
         }})
@@ -758,16 +1208,33 @@ const app = createApp({
       })
       addStory(`【${def.name}】加入屯兵寨！`, 'reward')
       addStory(`"${def.title}${def.name}来了！"`, 'npc')
+      checkAchievements()
+      // 检查羁绊激活
+      checkNewBonds(hid)
+    }
+
+    function checkNewBonds(newHeroId) {
+      const heroIds = gs.heroes.map(h=>h.id)
+      for (const bond of HERO_BONDS) {
+        if (bond.members.includes(newHeroId) && bond.members.every(mid=>heroIds.includes(mid))) {
+          addStory(`---`)
+          addStory(`🔮 羁绊激活：【${bond.name}】！`, 'bond')
+          addStory(`效果：${bond.combatDesc}`, 'bond')
+        }
+      }
     }
 
     function heroAssign(hid) {
       const hero = gs.heroes.find(h=>h.id===hid)
       if (!hero) return
-      const opts = [{ text:'取消分配（待命）', action:()=>{ const ob=gs.buildings.find(b=>b.assignedHero===hid); if(ob)ob.assignedHero=null; hero.assignedTo=null; addStory(`${hero.name}回归待命状态。`,'system') } }]
+      const opts = [{ text:'取消分配（待命）', action:()=>{
+        const ob=gs.buildings.find(b=>b.assignedHero===hid); if(ob) ob.assignedHero=null; hero.assignedTo=null; addStory(`${hero.name}回归待命状态。`,'system')
+      }}]
       for (const b of gs.buildings) {
         opts.push({ text:`分配至【${b.name}】`, style:'primary', action:()=>{
           const ob = gs.buildings.find(ob=>ob.assignedHero===hid); if(ob) ob.assignedHero=null
-          const ob2 = gs.buildings.find(b2=>b2.id===b.id); if(ob2.assignedHero){const oh=gs.heroes.find(oh=>oh.id===ob2.assignedHero);if(oh)oh.assignedTo=null}
+          const ob2 = gs.buildings.find(b2=>b2.id===b.id)
+          if (ob2.assignedHero) { const oh=gs.heroes.find(oh=>oh.id===ob2.assignedHero); if(oh) oh.assignedTo=null }
           ob2.assignedHero=hid; hero.assignedTo=b.id
           addStory(`${hero.name}已分配至【${b.name}】。`,'system')
         }})
@@ -778,10 +1245,41 @@ const app = createApp({
     function heroTalk(hid) {
       const h = gs.heroes.find(h=>h.id===hid)
       if (!h) return
-      h.affection = Math.min(100, (h.affection||30)+3)
-      const lines = [`"主公有何吩咐？"`, `"今日天色不错，正适合操练。"`, `"某家自当尽力！"`, `"主公放心，某绝不退缩！"`]
+      const oldAffection = h.affection || 30
+      h.affection = Math.min(100, oldAffection + 3)
+      const def = HERO_DEFS.find(d=>d.id===hid)
+      const lines = def?.talkLines || [`"主公有何吩咐？"`, `"末将听命！"`]
       addStory(`${h.name}：${lines[Math.floor(Math.random()*lines.length)]}`, 'npc')
       addStory(`（好感 +3，当前好感：${h.affection}）`, 'system')
+      // 好感度里程碑触发
+      if (oldAffection < 50 && h.affection >= 50) triggerHeroAffectionEvent(hid, 50)
+      if (oldAffection < 80 && h.affection >= 80) triggerHeroAffectionEvent(hid, 80)
+      checkAchievements()
+    }
+
+    function triggerHeroAffectionEvent(hid, threshold) {
+      const h = gs.heroes.find(h=>h.id===hid)
+      if (!h) return
+      addStory('---')
+      if (threshold === 50) {
+        addStory(`${h.name}对你的了解加深，主动请缨承担重要任务。`, 'event')
+        addStory(`${h.name}：主公，某家愿意独领一军，为您冲锋陷阵！`, 'npc')
+        h.loyalty = Math.min(100, h.loyalty + 10)
+        addStory(`（忠诚 +10）`, 'system')
+      } else if (threshold === 80) {
+        addStory(`${h.name}视你为知己，愿意倾诉心中秘密。`, 'event')
+        const secretLines = {
+          chengYaoJin: '主公，老程我其实有一个秘密武器，三板斧之后还有第四斧！',
+          wangBoDang: '主公，伯当此生最大的心愿，就是让天下人都说"王伯当弓术天下第一"！',
+          qinShuba: '主公，我少年时曾受恩于一位老将，此生立志超越他！',
+          weizhen: '主公，微臣今日有一计，可令粮食增产三成...',
+          qinQiong: '主公，叔宝有一事相告——某早年曾与尉迟恭有一个约定...',
+          default: `主公，${h.name}说，此后生死相随，绝不背叛！`
+        }
+        addStory(`${h.name}：${secretLines[hid]||secretLines.default}`, 'npc')
+        addStory(`（忠诚 +15，解锁专属对话）`, 'system')
+        h.loyalty = Math.min(100, h.loyalty + 15)
+      }
     }
 
     function heroGift(hid) {
@@ -793,18 +1291,21 @@ const app = createApp({
           gs.gold-=50; const bonus=h.favorite==='美酒'?15:5
           h.affection=Math.min(100,(h.affection||30)+bonus)
           addStory(`赠送美酒给${h.name}，好感+${bonus}。`,'reward')
+          checkAchievements()
         }},
         { text:`名剑（200金）`, style:'primary', action:()=>{
           if(gs.gold<200){addStory('钱不够！','warning');return}
           gs.gold-=200; const bonus=h.favorite==='名剑'?25:10
           h.affection=Math.min(100,(h.affection||30)+bonus)
           addStory(`赠送名剑给${h.name}，好感+${bonus}。`,'reward')
+          checkAchievements()
         }},
         { text:`战马（500金）`, style:'primary', action:()=>{
           if(gs.gold<500){addStory('钱不够！','warning');return}
           gs.gold-=500; const bonus=h.favorite==='良马'||h.favorite==='战马'?35:15
           h.affection=Math.min(100,(h.affection||30)+bonus)
           addStory(`赠送战马给${h.name}，好感+${bonus}。`,'reward')
+          checkAchievements()
         }},
         { text:'取消' }
       ])
@@ -821,6 +1322,9 @@ const app = createApp({
           gs.gold-=200
           gs.heroes.push({ ...HERO_DEFS.find(h=>h.id==='weizhen'), level:1, exp:0, expNext:100, loyalty:80, affection:50, assignedTo:null })
           addStory('魏徵正式加入屯兵寨！', 'reward')
+          unlockAchieve('secret_weizhen')
+          checkNewBonds('weizhen')
+          checkAchievements()
         }}, { text:'婉言拒绝' }])
       }
       if (hall >= 3 && !gs.heroes.find(h=>h.id==='xueMaoJun') && !gs.defeatedFactions.includes('_xu_visited')) {
@@ -832,6 +1336,9 @@ const app = createApp({
           gs.gold-=400
           gs.heroes.push({ ...HERO_DEFS.find(h=>h.id==='xueMaoJun'), level:1, exp:0, expNext:120, loyalty:75, affection:40, assignedTo:null })
           addStory('徐茂公正式加入屯兵寨！', 'reward')
+          unlockAchieve('secret_xu')
+          checkNewBonds('xueMaoJun')
+          checkAchievements()
         }}, { text:'婉言拒绝' }])
       }
     }
@@ -845,7 +1352,6 @@ const app = createApp({
       const goldCost = (td.costGold||0) * cnt
       const foodCost = td.costFood * cnt
       const ironCost = (td.costIron||0) * cnt
-      // 军营折扣
       const barrackLv = bldLevel('barracks')
       const discount = 1 - barrackLv * 0.05
       const actualGold = Math.floor(goldCost * discount)
@@ -856,6 +1362,7 @@ const app = createApp({
       gs.gold -= actualGold; gs.food -= actualFood; gs.iron -= ironCost
       gs.troops[type] = (gs.troops[type]||0) + cnt
       addStory(`训练了 ${cnt} 名${td.name}！${barrackLv>0?`（军营折扣${Math.floor(barrackLv*5)}%）`:''}`, 'system')
+      checkAchievements()
     }
 
     function initFactionBattle(fid) {
@@ -866,6 +1373,13 @@ const app = createApp({
       addStory('---')
       addStory(`【出征】目标：${faction.name} | 首领：${faction.leader}`, 'event')
       addStory(`${faction.combatLines[0]}`, 'npc')
+
+      // 羁绊激励
+      const activeBonds = activeHeroBonds.value
+      if (activeBonds.length > 0) {
+        addStory(`🔮 羁绊激励：${activeBonds.map(b=>b.name).join('+')}加成生效！`, 'bond')
+      }
+
       combat.active = true
       combat.factionId = fid
       combat.phase = 'fighting'
@@ -875,8 +1389,10 @@ const app = createApp({
       combat.enemyMaxHp = faction.troopCount * 10; combat.enemyHp = faction.troopCount * 10
       combat.allyMorale = 80; combat.enemyMorale = 100
       combat.win = false
-      setOpts([{ text:'发起进攻！', style:'primary', action:doCombatRound },
-               { text:'撤退（中止出征）', style:'danger', action:()=>{ combat.active=false; addStory('大军撤退，本次出征中止。', 'warning') } }])
+      setOpts([
+        { text:'发起进攻！', style:'primary', action:doCombatRound },
+        { text:'撤退（中止出征）', style:'danger', action:()=>{ combat.active=false; addStory('大军撤退，本次出征中止。', 'warning') } }
+      ])
     }
 
     function doCombatRound() {
@@ -884,28 +1400,41 @@ const app = createApp({
       const faction = FACTIONS.find(f=>f.id===combat.factionId)
       if (!faction) return
 
+      // 获取羁绊战斗加成
+      const bondBonus = getBondCombatBonus()
+
       // 我方伤害
       const techBonus = 1 + (gs.tech['infantry_tech']||0)*0.05 + (gs.tech['cavalry_tech']||0)*0.04
       const heroBonus = 1 + gs.heroes.length * 0.03
-      const baseDmg = Math.max(10, Math.floor(myPower.value * 0.4 * techBonus * heroBonus * (combat.allyMorale/100)))
-      const dmg = baseDmg + Math.floor(Math.random()*baseDmg*0.3-baseDmg*0.15)
+      const atkMult = 1 + bondBonus.atkBonus
+      const baseDmg = Math.max(10, Math.floor(myPower.value * 0.4 * techBonus * heroBonus * atkMult * (combat.allyMorale/100)))
+      const dmg = baseDmg + Math.floor(Math.random()*baseDmg*0.3 - baseDmg*0.15)
       combat.enemyHp = Math.max(0, combat.enemyHp - dmg)
 
-      // 武将技能触发（30%概率）
+      // 武将技能触发（正常30%，羁绊保障100%）
       const randomHero = gs.heroes[Math.floor(Math.random()*gs.heroes.length)]
-      if (randomHero && Math.random() < 0.3) {
+      const skillTriggerChance = bondBonus.guaranteeSkill ? 1.0 : 0.3
+      if (randomHero && Math.random() < skillTriggerChance) {
         addStory(`✨ ${randomHero.name}发动【${randomHero.skill}】：${randomHero.skillDesc}！`, 'reward')
-        combat.enemyHp = Math.max(0, combat.enemyHp - Math.floor(dmg*0.3))
+        combat.enemyHp = Math.max(0, combat.enemyHp - Math.floor(dmg * 0.3))
+      }
+
+      // 羁绊额外效果
+      if (bondBonus.moraleExtra > 0) {
+        combat.enemyMorale = Math.max(0, combat.enemyMorale - bondBonus.moraleExtra)
       }
 
       // 敌方伤害
       if (combat.enemyHp > 0) {
         const weatherDebuff = WEATHERS[gs.weather].combatMod
-        const enemyAtk = faction.powerReq * 0.25 * weatherDebuff * (combat.enemyMorale/100)
-        const enemyDmg = Math.max(5, Math.floor(enemyAtk + Math.random()*20-10))
+        const defMult = 1 + bondBonus.defBonus
+        const enemyAtk = faction.powerReq * 0.25 * weatherDebuff * (combat.enemyMorale/100) / defMult
+        const enemyDmg = Math.max(5, Math.floor(enemyAtk + Math.random()*20 - 10))
         combat.allyHp = Math.max(0, combat.allyHp - enemyDmg)
-        combat.enemyMorale = Math.max(30, combat.enemyMorale - 5)
-        combat.allyMorale = Math.max(30, combat.allyMorale - 2)
+        if (!bondBonus.moraleImmune) {
+          combat.enemyMorale = Math.max(30, combat.enemyMorale - 5)
+          combat.allyMorale = Math.max(30, combat.allyMorale - 2)
+        }
         const ln = faction.combatLines[Math.min(combat.round, faction.combatLines.length-1)]
         if (combat.round <= faction.combatLines.length) addStory(`${faction.leader}：${ln.split('：')[1]||ln}`, 'npc')
         addStory(`第${combat.round}回合 | 我军攻击 ${dmg} | 敌军反击 ${enemyDmg} | 敌HP：${combat.enemyHp}/${combat.enemyMaxHp}`, 'system')
@@ -915,52 +1444,53 @@ const app = createApp({
 
       // 判断结果
       if (combat.enemyHp <= 0) {
-        // 胜利
         combat.phase = 'result'; combat.win = true
-        resolveCombatVictory(faction)
+        // 检查HP成就
+        const hpPct = combat.allyHp / combat.allyMaxHp
+        resolveCombatVictory(faction, hpPct)
       } else if (combat.allyHp <= 0) {
-        // 失败
         combat.phase = 'result'; combat.win = false
         combat.active = false
-        addStory('---', 'divider')
+        addStory('---')
         addStory('我军溃败！兵力损失惨重，被迫撤退！', 'warning')
         const loss = Math.floor(totalTroops.value * 0.3)
         gs.troops.infantry = Math.max(0, gs.troops.infantry - loss)
         gs.prestige = Math.max(0, gs.prestige - 20)
-        setOpts([])
+        clearOpts()
       } else {
-        // 继续
         const hpPct = Math.floor(combat.enemyHp / combat.enemyMaxHp * 100)
-        setOpts([{ text:`继续进攻（敌方HP: ${hpPct}%）`, style:'primary', action:doCombatRound },
-                 { text:'战略撤退', style:'danger', action:()=>{ combat.active=false; addStory('撤退！我军有序撤离。','warning') } }])
+        setOpts([
+          { text:`继续进攻（敌方HP: ${hpPct}%）`, style:'primary', action:doCombatRound },
+          { text:'战略撤退', style:'danger', action:()=>{ combat.active=false; addStory('撤退！我军有序撤离。','warning') } }
+        ])
       }
     }
 
-    function resolveCombatVictory(faction) {
+    function resolveCombatVictory(faction, hpPct) {
       combat.active = false
       gs.defeatedFactions.push(faction.id)
       addStory('---')
       addStory(`🎉 大获全胜！${faction.name}已被击败！`, 'reward')
       gs.gold += faction.rewardGold; gs.food += faction.rewardFood; gs.prestige += faction.rewardPrestige
       addStory(`获得：金${faction.rewardGold} 粮${faction.rewardFood} 威望${faction.rewardPrestige}`, 'reward')
-      // 解锁建筑
       if (faction.unlockBlds && faction.unlockBlds.length > 0) {
         addStory(`解锁新建筑：${faction.unlockBlds.map(id=>getBldNameById(id)).join('、')}`, 'reward')
       }
-      // 解锁武将
       if (faction.unlockHeroes && faction.unlockHeroes.length > 0) {
         const names = faction.unlockHeroes.map(id=>HERO_DEFS.find(h=>h.id===id)?.name||id).join('、')
         addStory(`可招募新武将：${names}`, 'reward')
       }
-      // 特殊事件
       addStory(`特殊事件：${faction.specialEvent}`, 'event')
       // 探索该地点
       const loc = MAP_LOCATIONS.find(l=>l.factionId===faction.id)
       if (loc && !gs.exploredLocations.includes(loc.id)) gs.exploredLocations.push(loc.id)
+      // 成就检查
+      if (hpPct >= 0.8) unlockAchieve('no_damage_win')
+      // 天气中获胜成就
+      if (gs.weather === 4 || gs.weather === 5) unlockAchieve('win_weather')
+      checkAchievements()
       // 结局判断
-      if (faction.id === 'liyuan') {
-        setTimeout(()=>triggerEnding(), 1500)
-      }
+      if (faction.id === 'liyuan') setTimeout(()=>triggerEnding(), 1500)
       clearOpts()
     }
 
@@ -970,9 +1500,23 @@ const app = createApp({
       addStory('你站在长安城楼之上，俯瞰着这片历经战火的土地。', 'narrate')
       addStory('你将如何面对这个全新的天下？', 'narrate')
       setOpts([
-        { text:'开创新朝，自立为帝', style:'primary', action:()=>{ addStory('你宣告建立新王朝，天下归一。结局：开创新朝 🏆', 'reward') }},
-        { text:'辅佐明主，功成身退', style:'', action:()=>{ addStory('你将玉玺献于明主，隐退山林。结局：功成身退 🌟', 'reward') }},
-        { text:'拥兵自重，割据一方', style:'', action:()=>{ addStory('你选择保留军队，割据一方。结局：割据诸侯 ⚔', 'reward') }},
+        { text:'开创新朝，自立为帝', style:'primary', action:()=>{
+          addStory('你宣告建立新王朝，天下归一，万民欢腾！', 'reward')
+          addStory('──────────────────────────────────', 'divider')
+          addStory('🏆 结局：开创新朝！你的名字永载史册！', 'achieve')
+          unlockAchieve('secret_dynasty')
+        }},
+        { text:'辅佐明主，功成身退', action:()=>{
+          addStory('你将玉玺献于明主，洒然归隐山林。', 'reward')
+          addStory('──────────────────────────────────', 'divider')
+          addStory('🌟 结局：功成身退！史书留名，天下称颂！', 'achieve')
+          unlockAchieve('secret_retire')
+        }},
+        { text:'拥兵自重，割据一方', action:()=>{
+          addStory('你保留军队，割据一方，与天下诸侯并立。', 'reward')
+          addStory('──────────────────────────────────', 'divider')
+          addStory('⚔ 结局：割据诸侯！此后天下，三分鼎立！', 'achieve')
+        }},
       ])
     }
 
@@ -982,10 +1526,10 @@ const app = createApp({
       if (!loc) return
       if (gs.actionPoints < loc.distance) { addStory('行动点不足！请先推进几日。', 'warning'); return }
       gs.actionPoints -= loc.distance
+      gs.totalTravelPoints = (gs.totalTravelPoints||0) + loc.distance
       gs.location = loc.name
       if (!gs.exploredLocations.includes(locId)) gs.exploredLocations.push(locId)
       addStory(`前往【${loc.name}】，消耗行动点${loc.distance}。`, 'system')
-      // 随机触发地点事件
       if (loc.events && Math.random() < 0.6) {
         const ev = loc.events[Math.floor(Math.random()*loc.events.length)]
         addStory(`在${loc.name}发现：${ev}`, 'event')
@@ -993,6 +1537,7 @@ const app = createApp({
       if (loc.factionId && !gs.defeatedFactions.includes(loc.factionId)) {
         addStory(`⚠ 此地由【${FACTIONS.find(f=>f.id===loc.factionId)?.name||'未知势力'}】控制，小心行事！`, 'warning')
       }
+      checkAchievements()
     }
 
     function exploreLoc(locId) {
@@ -1001,7 +1546,23 @@ const app = createApp({
       if (!gs.exploredLocations.includes(locId)) gs.exploredLocations.push(locId)
       addStory(`探索了【${loc.name}】！`, 'reward')
       gs.prestige += 5
-      if (Math.random() < 0.4) { gs.gold += 100; addStory('发现了隐藏的财宝！金+100', 'reward') }
+      if (Math.random() < 0.4) {
+        gs.gold += 100
+        gs.totalExploreCount = (gs.totalExploreCount||0) + 1
+        addStory('发现了隐藏的财宝！金+100', 'reward')
+      }
+      // 五岭成就
+      if (locId === 'wuling') {
+        addStory('在深山中遇见隐世高人，传授一门绝学！', 'event')
+        // 随机升级一项科技
+        const eligible = TECH_DEFS.filter(t=>(gs.tech[t.id]||0)<t.maxLvl)
+        if (eligible.length > 0) {
+          const t = eligible[Math.floor(Math.random()*eligible.length)]
+          gs.tech[t.id] = (gs.tech[t.id]||0) + 1
+          addStory(`${t.name}获得提升！（Lv.${gs.tech[t.id]}）`, 'reward')
+        }
+      }
+      checkAchievements()
     }
 
     function renderMap() {
@@ -1013,7 +1574,11 @@ const app = createApp({
           const isExplored = gs.exploredLocations.includes(loc.id)
           const isCur = loc.name === gs.location
           const isEnemy = loc.factionId && !gs.defeatedFactions.includes(loc.factionId)
-          const tag = isCur ? `<span class="cur">[${loc.icon}]</span>` : isExplored ? (isEnemy ? `<span class="enemy">[${loc.icon}]</span>` : `<span class="explored">[${loc.icon}]</span>`) : `<span style="color:var(--border)">[?]</span>`
+          const tag = isCur
+            ? `<span class="cur">[${loc.icon}]</span>`
+            : isExplored
+              ? (isEnemy ? `<span class="enemy">[${loc.icon}]</span>` : `<span class="explored">[${loc.icon}]</span>`)
+              : `<span style="color:var(--border)">[?]</span>`
           grid[loc.y][loc.x] = tag
         }
       }
@@ -1025,7 +1590,10 @@ const app = createApp({
       const t = TECH_DEFS.find(t=>t.id===tid)
       if (!t) return { gold:0 }
       const lv = gs.tech[tid] || 0
-      return { gold: Math.floor(t.baseCost.gold * Math.pow(t.costMult, lv)), prestige: Math.floor((t.baseCost.prestige||0) * Math.pow(t.costMult, lv)) }
+      return {
+        gold: Math.floor(t.baseCost.gold * Math.pow(t.costMult, lv)),
+        prestige: Math.floor((t.baseCost.prestige||0) * Math.pow(t.costMult, lv))
+      }
     }
 
     function canResearch(tid) {
@@ -1044,6 +1612,81 @@ const app = createApp({
       gs.tech[tid] = lv + 1
       addStory(`${t.name}升级到Lv.${gs.tech[tid]}！`, 'reward')
       addStory(`效果：${t.effects[gs.tech[tid]]}`, 'system')
+      checkAchievements()
+    }
+
+    // ---- 节日事件 ----
+    function checkFestival() {
+      const fest = SEASON_FESTIVALS[gs.season]
+      if (!fest) return
+      if (gs.dayInSeason === fest.day) {
+        const alreadyDone = (gs.festivalsExperienced||[]).includes(gs.season)
+        if (!alreadyDone) {
+          if (!gs.festivalsExperienced) gs.festivalsExperienced = []
+          gs.festivalsExperienced.push(gs.season)
+          triggerFestivalEvent(fest)
+        }
+      }
+    }
+
+    function triggerFestivalEvent(fest) {
+      addStory('---')
+      addStory(`🎆 今日是【${fest.name}】！`, 'event')
+      switch(fest.event) {
+        case 'festival_lantern':
+          addStory('元宵佳节，张灯结彩，万人观灯！', 'narrate')
+          setOpts([
+            { text:'举办灯会（金-200，民忠+15，威望+10）', style:'primary', action:()=>{
+              if(gs.gold<200){addStory('金币不足！','warning');return}
+              gs.gold-=200; gs.loyalty=Math.min(100,gs.loyalty+15); gs.prestige+=10
+              addStory('灯会大获成功，万民欢喜！', 'reward')
+            }},
+            { text:'平常度过（无变化）' }
+          ])
+          break
+        case 'festival_dragon':
+          addStory('端午节，龙舟竞渡，粽香飘远！', 'narrate')
+          setOpts([
+            { text:'组织龙舟赛（金-100，威望+20，全军士气+20%）', style:'primary', action:()=>{
+              if(gs.gold<100){addStory('金币不足！','warning');return}
+              gs.gold-=100; gs.prestige+=20
+              addStory('龙舟赛大胜，全军士气大振！', 'reward')
+            }},
+            { text:'安排包粽（粮-50，民忠+8）', action:()=>{
+              gs.food=Math.max(0,gs.food-50); gs.loyalty=Math.min(100,gs.loyalty+8)
+              addStory('粽香弥漫，将士皆喜。', 'reward')
+            }}
+          ])
+          break
+        case 'festival_moon':
+          addStory('中秋佳节，明月当空，思乡之情涌动。', 'narrate')
+          setOpts([
+            { text:'赏月赋诗（威望+15，武将忠诚+5）', style:'primary', action:()=>{
+              gs.prestige+=15
+              gs.heroes.forEach(h=>h.loyalty=Math.min(100,h.loyalty+5))
+              addStory('月圆人团圆，武将们感动不已。', 'reward')
+            }},
+            { text:'发放月饼（粮-100，民忠+12）', action:()=>{
+              gs.food=Math.max(0,gs.food-100); gs.loyalty=Math.min(100,gs.loyalty+12)
+              addStory('月饼香甜，民心归附。', 'reward')
+            }}
+          ])
+          break
+        case 'festival_double9':
+          addStory('重阳节，登高望远，秋风送爽。', 'narrate')
+          setOpts([
+            { text:'登高誓师（威望+25，全军战力+10%持续5日）', style:'primary', action:()=>{
+              gs.prestige+=25
+              addStory('誓师完毕，将士用命，气势如虹！', 'reward')
+            }},
+            { text:'祭祖祈福（民忠+10，粮+100）', action:()=>{
+              gs.loyalty=Math.min(100,gs.loyalty+10); gs.food+=100
+              addStory('祭祖祈福，风调雨顺。', 'reward')
+            }}
+          ])
+          break
+      }
+      checkAchievements()
     }
 
     // ---- 日推进 ----
@@ -1055,30 +1698,41 @@ const app = createApp({
       if (gs.dayInSeason > 22) {
         gs.dayInSeason = 1
         gs.season++
-        if (gs.season > 4) { gs.season = 1; gs.year++ }
+        if (gs.season > 4) {
+          gs.season = 1; gs.year++
+          // 跨年重置节日记录
+          gs.festivalsExperienced = []
+        }
         addStory(`季节更迭：进入${gs.year}年${SEASONS[gs.season-1]}季。`, 'event')
       }
+
       // 天气
       const wProp = gs.season===4 ? [0.2,0.3,0.1,0,0.1,0.3,0] : gs.season===3 ? [0.3,0.2,0.2,0.1,0.1,0,0.1] : gs.season===2 ? [0.4,0.1,0.2,0.1,0.1,0,0.2] : [0.3,0.2,0.3,0.1,0.1,0,0]
-      let r = Math.random(); let wi = 0; for (let i=0;i<wProp.length;i++){r-=wProp[i];if(r<=0){wi=i;break;}}
+      let r = Math.random(); let wi = 0
+      for (let i=0; i<wProp.length; i++) { r -= wProp[i]; if (r<=0) { wi=i; break; } }
       gs.weather = wi
+
+      // 建筑建造倒计时
+      for (const b of gs.buildings) {
+        if (b.underConstruction) checkBldComplete(b)
+      }
 
       // 建筑产出
       let foodProd=0, woodProd=0, ironProd=0, goldProd=0, prestigeProd=0
       const wm = WEATHERS[gs.weather]
+      const bondProdBonus = 1 + getBondProdBonus()
       for (const b of gs.buildings) {
-        if (b.underConstruction) { b.constructDays--; if(b.constructDays<=0)b.underConstruction=false; continue }
+        if (b.underConstruction) continue
         const def = BLD_DEFS.find(d=>d.id===b.id)
         if (!def) continue
         const heroBoost = getHeroBoost(b)
-        const base = Math.floor((def.baseOutput||0) * b.level * (1+heroBoost))
+        const base = Math.floor((def.baseOutput||0) * b.level * (1+heroBoost) * bondProdBonus)
         if (def.outputType==='food') foodProd += Math.floor(base * wm.foodMod * getAgriBonus())
         else if (def.outputType==='wood') woodProd += Math.floor(base*0.5)
         else if (def.outputType==='iron') ironProd += Math.floor(base*0.3)
         else if (def.outputType==='gold') goldProd += base
         else if (def.outputType==='prestige') prestigeProd += base
       }
-      // 人口基础收入
       goldProd += Math.floor(gs.population * 0.3 + gs.prestige * 0.1)
       gs.food += foodProd; gs.wood += woodProd; gs.iron += ironProd; gs.gold += goldProd; gs.prestige += prestigeProd
 
@@ -1091,8 +1745,6 @@ const app = createApp({
         addStory('⚠ 粮食告罄！民心下降！', 'warning')
       }
       if (gs.loyalty < 30) addStory('⚠ 民忠极低，恐有叛乱！', 'warning')
-
-      // 民忠自然恢复
       if (gs.food > 0 && gs.loyalty < 80) gs.loyalty = Math.min(80, gs.loyalty + 1)
 
       // 行动点恢复
@@ -1100,7 +1752,7 @@ const app = createApp({
 
       // 武将经验成长
       for (const h of gs.heroes) {
-        const expGain = Math.floor(5 * (1 + (h.passive||'').includes('经验')?0.3:0))
+        const expGain = Math.floor(5 * (1 + (h.passive||'').includes('经验') ? 0.3 : 0))
         h.exp = (h.exp||0) + expGain
         while (h.exp >= h.expNext) {
           h.exp -= h.expNext; h.level++
@@ -1110,18 +1762,22 @@ const app = createApp({
           h.expNext = Math.floor(h.expNext * 1.5)
           addStory(`${h.name}升级至Lv.${h.level}！`, 'reward')
         }
-        // 忠诚度自然变化
-        if (h.loyalty < 100) h.loyalty = Math.min(100, h.loyalty + (h.passive||'').includes('桀骜') ? -0.5 : 0.3)
+        if (h.loyalty < 100) h.loyalty = Math.min(100, h.loyalty + ((h.passive||'').includes('桀骜') ? -0.5 : 0.3))
       }
 
+      // 节日检查
+      checkFestival()
+
       // 随机事件（约30%概率）
-      if (Math.random() < 0.3) triggerRandomEvent()
+      if (Math.random() < 0.3 && gs.options.length === 0) triggerRandomEvent()
 
       // 日志
       addStory(`第${gs.year}年${SEASONS[gs.season-1]}季第${gs.dayInSeason}日 ${wm.icon}${wm.name}`, 'system')
       if (foodProd > 0 || goldProd > 0) {
         addStory(`产出：粮+${foodProd} 金+${goldProd}${woodProd>0?` 木+${woodProd}`:''}${ironProd>0?` 铁+${ironProd}`:''}${prestigeProd>0?` 威+${prestigeProd}`:''}  消耗：粮-${foodCost}`, 'system')
       }
+
+      checkAchievements()
     }
 
     function getAgriBonus() {
@@ -1145,7 +1801,11 @@ const app = createApp({
       const ev = RANDOM_EVENTS[Math.floor(Math.random()*RANDOM_EVENTS.length)]
       addStory('---')
       addStory(`📜 ${ev.text}`, 'event')
-      setOpts(ev.options.map((opt,i)=>({ text:opt, style:i===0?'primary':'', action:()=>applyEventEffect(ev.effect[i]) })))
+      setOpts(ev.options.map((opt,i)=>({
+        text: opt,
+        style: i===0 ? 'primary' : '',
+        action: ()=>applyEventEffect(ev.effect[i] || {})
+      })))
     }
 
     function applyEventEffect(eff) {
@@ -1158,15 +1818,40 @@ const app = createApp({
       if (eff.loyalty) gs.loyalty = Math.max(0, Math.min(100, gs.loyalty + eff.loyalty))
       if (eff.population) gs.population += eff.population
       if (eff.population_loss) gs.population = Math.max(1, gs.population - eff.population_loss)
+      if (eff.infantry_loss) gs.troops.infantry = Math.max(0, gs.troops.infantry - eff.infantry_loss)
+      if (eff.infantry_add) gs.troops.infantry = (gs.troops.infantry||0) + eff.infantry_add
+      if (eff.cavalry_add) gs.troops.cavalry = (gs.troops.cavalry||0) + eff.cavalry_add
       if (eff.rand_hero) {
         const pool = HERO_DEFS.filter(h=>h.rank===eff.rand_hero && !gs.heroes.find(rh=>rh.id===h.id))
         if (pool.length > 0) {
           const h = pool[Math.floor(Math.random()*pool.length)]
           gs.heroes.push({ ...h, level:1, exp:0, expNext:h.expNext||100, loyalty:70, affection:30, assignedTo:null })
           addStory(`随机获得武将：【${h.name}】加入！`, 'reward')
+          checkNewBonds(h.id)
         }
       }
+      if (eff.rand_tech) {
+        const eligible = TECH_DEFS.filter(t=>(gs.tech[t.id]||0)<t.maxLvl)
+        if (eligible.length > 0) {
+          const t = eligible[Math.floor(Math.random()*eligible.length)]
+          gs.tech[t.id] = (gs.tech[t.id]||0) + 1
+          addStory(`${t.name}获得提升！（Lv.${gs.tech[t.id]}）`, 'reward')
+        }
+      }
+      if (eff.hero_level_up) {
+        if (gs.heroes.length > 0) {
+          const h = gs.heroes[Math.floor(Math.random()*gs.heroes.length)]
+          h.level++
+          h.atk += (h.growth?.atk||1); h.int += (h.growth?.int||0.5)
+          h.cmd += (h.growth?.cmd||1); h.pol += (h.growth?.pol||0.5)
+          addStory(`${h.name}因顿悟升级至Lv.${h.level}！`, 'reward')
+        }
+      }
+      if (eff.hero_loyalty) {
+        gs.heroes.forEach(h=>h.loyalty=Math.min(100,h.loyalty+(eff.hero_loyalty||0)))
+      }
       addStory('已处理事件。', 'system')
+      checkAchievements()
     }
 
     // ---- 存档/读档 ----
@@ -1179,6 +1864,10 @@ const app = createApp({
         buildings:gs.buildings, heroes:gs.heroes, troops:gs.troops, tech:gs.tech,
         defeatedFactions:gs.defeatedFactions, exploredLocations:gs.exploredLocations,
         location:gs.location, actionPoints:gs.actionPoints,
+        achievements:gs.achievements,
+        totalExploreCount:gs.totalExploreCount||0,
+        totalTravelPoints:gs.totalTravelPoints||0,
+        festivalsExperienced:gs.festivalsExperienced||[],
       }
       localStorage.setItem('stjyc_v1', JSON.stringify(data))
       addStory('💾 游戏已保存！', 'system')
@@ -1200,9 +1889,18 @@ const app = createApp({
           defeatedFactions:d.defeatedFactions||[], exploredLocations:d.exploredLocations||['taiyuan'],
           location:d.location||'太原', actionPoints:d.actionPoints||10,
           story:[], options:[],
+          achievements:d.achievements||[],
+          totalExploreCount:d.totalExploreCount||0,
+          totalTravelPoints:d.totalTravelPoints||0,
+          festivalsExperienced:d.festivalsExperienced||[],
         })
         gs.started = true
         addStory('📂 读档成功！聚义事业继续…', 'reward')
+        // 检查已激活的羁绊
+        const activeBonds = activeHeroBonds.value
+        if (activeBonds.length > 0) {
+          addStory(`🔮 激活的羁绊：${activeBonds.map(b=>b.name).join('、')}`, 'bond')
+        }
       } catch(e) { alert('读档失败：'+e.message) }
     }
 
@@ -1217,8 +1915,9 @@ const app = createApp({
         buildings:[], heroes:[], troops:{infantry:10,archers:0,musketeers:0,cavalry:0},
         tech:{}, defeatedFactions:[], exploredLocations:['taiyuan'],
         location:'太原', actionPoints:10, story:[], options:[],
+        achievements:[],
+        totalExploreCount:0, totalTravelPoints:0, festivalsExperienced:[],
       })
-      // 初始故事
       addStory('═'.repeat(32))
       addStory('大业七年，隋炀帝暴政，天下大乱。', 'narrate')
       addStory('你曾是太原府一名小军校，眼见朝廷腐败，民不聊生，遂带三五兄弟出走，于太原山中觅得一处险地。', 'narrate')
@@ -1226,28 +1925,37 @@ const app = createApp({
       addStory('【屯兵寨】就此立下！', 'narrate')
       addStory('═'.repeat(32))
       addStory(`难度：${['普通','困难','地狱'][['normal','hard','hell'].indexOf(diff)]} | 初始：金${gs.gold} 粮${gs.food}`, 'system')
-      setOpts([{ text:'建造第一座建筑', style:'primary', action:()=>{ activeTab.value='build'; addStory('打开建造面板，先造一座农田或伐木场！','system') } },
-               { text:'先查看武将', style:'', action:()=>{ activeTab.value='heroes'; addStory('查看可招募武将。','system') } }])
+      addStory('提示：先建造建筑生产资源，训练兵力，再招募武将，激活羁绊！', 'system')
+      setOpts([
+        { text:'建造第一座建筑', style:'primary', action:()=>{ activeTab.value='build'; addStory('打开建造面板，先造一座农田或伐木场！','system') }},
+        { text:'先查看武将', action:()=>{ activeTab.value='heroes'; addStory('查看可招募武将。','system') }},
+        { text:'了解羁绊系统', action:()=>{ addStory('武将羁绊：当特定武将组合同时在队时自动激活，提供强力战斗加成！','system'); addStory('例：秦琼+尉迟恭=门神守护（全军防御+30%）','system'); addStory('共11组羁绊，尽可能激活获得最大加成！','system') }}
+      ])
     }
 
     const TABS = [
-      { id:'village', label:'🏯 山寨' },
-      { id:'build',   label:'🏗 建造' },
-      { id:'heroes',  label:'👥 武将' },
-      { id:'military',label:'⚔ 军事' },
-      { id:'map',     label:'🗺 大地图' },
-      { id:'tech',    label:'🔬 科技' },
-      { id:'system',  label:'⚙ 系统' },
+      { id:'village',  label:'🏯 山寨' },
+      { id:'build',    label:'🏗 建造' },
+      { id:'heroes',   label:'👥 武将' },
+      { id:'military', label:'⚔ 军事' },
+      { id:'map',      label:'🗺 大地图' },
+      { id:'tech',     label:'🔬 科技' },
+      { id:'achieve',  label:'🏆 成就' },
+      { id:'system',   label:'⚙ 系统' },
     ]
 
     return {
       gs, activeTab, modal, storyBody, trainCount, combat,
+      achieveToast,
       hasSave, totalTroops, myPower, recruitableHeroes, accessibleLocations,
+      activeHeroBonds, activeBondsCount,
       SEASONS, WEATHERS, BLD_DEFS, HERO_DEFS, TROOP_TYPES, FACTIONS, MAP_LOCATIONS, TECH_DEFS, TABS,
+      HERO_BONDS, ACHIEVEMENTS, ACHIEVE_CATS,
       fmt, addStory, setOpts, clearOpts, chooseOpt, confirmAct,
-      hasBld, bldLevel, getBldName, getBldNameById, isUnlocked, canBuildNew, buildNew,
-      getBldUpgradeCost, canUpgradeBld, upgradeBld, getBldEffect, assignHeroToBld,
+      hasBld, bldLevel, getBldName, getBldNameById, getHeroName, isUnlocked, canBuildNew, buildNew,
+      getBldUpgradeCost, getBldUpgradeDays, canUpgradeBld, upgradeBld, getBldEffect, assignHeroToBld,
       isHeroUnlocked, canRecruit, recruitHero, heroAssign, heroTalk, heroGift,
+      isBondActive, getHeroBondTags, getBondCombatSummary,
       trainTroops, initFactionBattle, doCombatRound,
       travelTo, exploreLoc, renderMap,
       getTechCost, canResearch, researchTech,
