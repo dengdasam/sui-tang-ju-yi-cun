@@ -231,6 +231,50 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
 
 /* 新游戏+ */
 .ngplus-badge{display:inline-block;padding:2px 8px;font-size:10px;border-radius:2px;background:#2a1a08;color:var(--accent);border:1px solid var(--accent);margin-left:8px;}
+
+/* 战术道具 */
+.tactical-bar{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;padding:6px;background:#1a1008;border:1px solid var(--border);border-radius:2px;}
+.tactical-item{display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);cursor:pointer;font-size:12px;border-radius:2px;}
+.tactical-item:hover{border-color:var(--gold);}
+.tactical-item.used{opacity:.3;pointer-events:none;}
+.tactical-item .ti-count{color:var(--gold-dim);font-size:10px;}
+
+/* 礼物 */
+.gift-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:6px 0;}
+.gift-card{padding:6px;background:var(--bg);border:1px solid var(--border);text-align:center;cursor:pointer;border-radius:2px;font-size:12px;}
+.gift-card:hover{border-color:var(--gold);}
+.gift-card .gc-icon{font-size:20px;display:block;margin-bottom:2px;}
+.gift-card .gc-name{color:var(--text-bright);}
+.gift-card .gc-cost{color:var(--gold-dim);font-size:10px;}
+
+/* 坐骑 */
+.mount-slot{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:2px;margin:3px 0;}
+.mount-slot .ms-icon{font-size:16px;width:24px;text-align:center;}
+.mount-slot .ms-name{color:var(--text-bright);font-size:12px;flex:1;}
+
+/* 消耗品 */
+.consume-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:6px 0;}
+.consume-card{padding:6px 8px;background:var(--bg);border:1px solid var(--border);cursor:pointer;border-radius:2px;font-size:12px;display:flex;align-items:center;gap:4px;}
+.consume-card:hover{border-color:var(--gold);}
+.consume-card .cc-count{color:var(--gold-dim);font-size:10px;margin-left:auto;}
+
+/* 新手引导 */
+.tutorial-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;}
+.tutorial-box{max-width:360px;background:var(--panel-bg);border:2px solid var(--gold);padding:20px;text-align:center;border-radius:4px;}
+.tutorial-box .tb-title{color:var(--gold);font-size:18px;margin-bottom:12px;}
+.tutorial-box .tb-text{color:var(--text);font-size:13px;line-height:1.8;margin-bottom:16px;}
+.tutorial-box .tb-step{color:var(--text-dim);font-size:11px;margin-bottom:8px;}
+
+/* 评分 */
+.score-screen{text-align:center;padding:20px;}
+.score-screen .ss-grade{font-size:48px;font-weight:bold;color:var(--gold);text-shadow:0 0 20px rgba(201,165,92,.5);margin:10px 0;}
+.score-screen .ss-breakdown{color:var(--text-dim);font-size:12px;line-height:1.8;margin:12px 0;}
+.score-screen .ss-hidden{color:var(--accent);font-size:13px;margin-top:10px;padding:8px;background:#1a1008;border:1px dashed var(--accent);border-radius:2px;}
+
+/* 技能升级 */
+.skill-upgrade{display:inline-flex;align-items:center;gap:3px;margin-left:6px;}
+.skill-upgrade .su-dot{width:6px;height:6px;border-radius:50%;background:var(--gold-dim);}
+.skill-upgrade .su-dot.filled{background:var(--gold);}
 </style>
 </head>
 <body>
@@ -245,7 +289,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
     <button class="btn" @click="startGame('hell')">地狱模式</button>
     <button v-if="hasSave" class="btn" style="margin-top:16px;border-color:var(--gold-dim);" @click="loadGame">继续游戏</button>
     <button v-if="hasNgPlusSave()" class="btn" style="margin-top:16px;border-color:var(--accent);" @click="loadNgPlus">🌟 新游戏+</button>
-    <div class="version">v1.3 | 隋唐聚义村 · 新增阵型/装备/商队/钓鱼/新游戏+</div>
+    <div class="version">v1.4 | 隋唐聚义村 · 新增战术道具/礼物/坐骑/消耗品/教程/评分</div>
   </div>
 
   <!-- 游戏界面 -->
@@ -402,6 +446,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
                 <!-- 装备属性加成摘要 -->
                 <div v-if="getHeroEquipBonus(h.id).summary" style="font-size:11px;color:var(--gold-dim);margin-top:3px;">
                   📦 {{getHeroEquipBonus(h.id).summary}}
+                </div>
+                <!-- 坐骑槽位 -->
+                <div v-if="getHeroMount(h.id)" class="mount-slot">
+                  <span class="ms-icon">{{getHeroMount(h.id).icon}}</span>
+                  <span :class="'ms-name es-quality-'+getHeroMount(h.id).quality">{{getHeroMount(h.id).name}}</span>
+                  <span style="font-size:10px;color:var(--text-dim);">攻+{{getHeroMount(h.id).atk}} 速+{{getHeroMount(h.id).spd}}</span>
+                  <button class="btn-sm" style="font-size:10px;" @click="unequipMount(h.id)">卸</button>
+                </div>
+                <div v-else-if="gs.mounts&&gs.mounts.length>0" class="mount-slot" style="opacity:.5;">
+                  <span class="ms-icon">🐴</span><span class="ms-name" style="color:var(--text-dim);">未装备坐骑</span>
+                  <button class="btn-sm" style="font-size:10px;" @click="showMountPicker(h.id)">装</button>
                 </div>
                 <div class="cactions">
                   <button class="btn-sm" @click="heroAssign(h.id)">分配</button>
@@ -626,6 +681,59 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
             </div>
           </div>
 
+          <!-- 物品面板 -->
+          <div v-if="activeTab==='items'">
+            <div class="section-title">🎒 物品仓库</div>
+
+            <!-- 战术道具 -->
+            <div class="section-title" style="margin-top:12px;">🔥 战术道具 <span style="font-size:11px;color:var(--text-dim);">战斗中可用</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+              <div v-for="ti in TACTICAL_ITEMS" :key="ti.id" class="tactical-item" style="flex-direction:column;align-items:center;padding:8px;min-width:70px;">
+                <span style="font-size:20px;">{{ti.icon}}</span>
+                <span style="color:var(--text-bright);font-size:11px;">{{ti.name}}</span>
+                <span style="color:var(--gold-dim);font-size:10px;">×{{gs.tacticalItems?.[ti.id]||0}}</span>
+                <span style="color:var(--text-dim);font-size:9px;">💰{{ti.cost}}</span>
+                <button class="btn-sm" style="font-size:10px;padding:2px 6px;margin-top:2px;" @click="buyTactical(ti.id)" :disabled="gs.gold<ti.cost">购买</button>
+              </div>
+            </div>
+
+            <!-- 礼物 -->
+            <div class="section-title" style="margin-top:12px;">🎁 礼物 <span style="font-size:11px;color:var(--text-dim);">送武将+好感</span></div>
+            <div class="gift-grid">
+              <div v-for="g in GIFTS" :key="g.id" class="gift-card" @click="buyGift(g.id)" style="position:relative;">
+                <span class="gc-icon">{{g.icon}}</span>
+                <span class="gc-name">{{g.name}}</span>
+                <span class="gc-cost">💰{{g.cost}} | ×{{gs.gifts?.[g.id]||0}}</span>
+                <span v-if="gs.gifts?.[g.id]>0" style="font-size:9px;color:var(--accent);">可送礼</span>
+              </div>
+            </div>
+
+            <!-- 坐骑 -->
+            <div class="section-title" style="margin-top:12px;">🐴 坐骑</div>
+            <div v-for="m in MOUNTS" :key="m.id" class="mount-slot" style="justify-content:space-between;">
+              <span class="ms-icon">{{m.icon}}</span>
+              <span :class="'ms-name es-quality-'+m.quality" style="flex:1;">{{m.name}}</span>
+              <span style="color:var(--text-dim);font-size:10px;">攻+{{m.atk}} 速+{{m.spd}}</span>
+              <button class="btn-sm" style="font-size:10px;padding:2px 6px;" @click="buyMountItem(m.id)" :disabled="gs.gold<m.cost">💰{{m.cost}}</button>
+            </div>
+
+            <!-- 消耗品 -->
+            <div class="section-title" style="margin-top:12px;">🧪 消耗品 <span style="font-size:11px;color:var(--text-dim);">（可直接使用）</span></div>
+            <div class="consume-grid">
+              <div v-for="c in CONSUMABLES" :key="c.id" class="consume-card">
+                <span>{{c.icon}}</span>
+                <div style="flex:1;">
+                  <div style="color:var(--text-bright);font-size:11px;">{{c.name}}</div>
+                  <div style="color:var(--text-dim);font-size:9px;">{{c.desc}} | 💰{{c.cost}}</div>
+                </div>
+                <span v-if="gs.consumables?.[c.id]>0" class="cc-count">×{{gs.consumables?.[c.id]||0}}</span>
+                <button class="btn-sm" style="font-size:10px;padding:2px 6px;" @click="gs.gold>=c.cost?buyConsumable(c.id):useConsumable(c.id)" :disabled="gs.gold<c.cost&&(gs.consumables?.[c.id]||0)<1">
+                  {{(gs.consumables?.[c.id]||0)>0?'使用':'购买'}}
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- 系统面板 -->
           <div v-if="activeTab==='system'">
             <div class="section-title">⚙ 系统</div>
@@ -633,6 +741,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
               <button class="btn-sm" style="padding:8px;" @click="saveGame">💾 存档</button>
               <button class="btn-sm" style="padding:8px;" @click="loadGame">📂 读档</button>
               <button class="btn-sm red" style="padding:8px;" @click="confirmAct('返回标题','确定返回标题？未保存进度将丢失。',()=>{gs.started=false})">返回标题</button>
+              <button class="btn-sm" style="padding:8px;margin-top:4px;" @click="gs.tutorialStep=0;startTutorial()">📖 重新教程</button>
             </div>
             <div style="margin-top:16px;color:var(--text-dim);font-size:12px;line-height:2;">
               <div>已征讨势力：{{gs.defeatedFactions.filter(f=>!f.startsWith('_')).join('、')||'无'}}</div>
@@ -807,6 +916,36 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
       </template>
     </div>
   </div>
+
+  <!-- 教程弹窗 -->
+  <div v-if="tutorialState.active" class="tutorial-overlay">
+    <div class="tutorial-box">
+      <div class="tb-step">引导 {{tutorialState.step+1}}/{{TUTORIAL_STEPS.length}}</div>
+      <div class="tb-title">{{TUTORIAL_STEPS[tutorialState.step]?.title}}</div>
+      <div class="tb-text" style="white-space:pre-line;">{{TUTORIAL_STEPS[tutorialState.step]?.text}}</div>
+      <button class="btn" style="width:100%;margin-bottom:8px;" @click="nextTutorialStep">
+        {{tutorialState.step<TUTORIAL_STEPS.length-1?'下一步':'完成教程！'}}
+      </button>
+      <button class="btn-sm" style="color:var(--text-dim);" @click="skipTutorial">跳过教程</button>
+    </div>
+  </div>
+
+  <!-- 评分弹窗 -->
+  <div v-if="scoreState.active" class="minigame-overlay">
+    <div class="minigame-box score-screen">
+      <div class="section-title">📜 天下评定</div>
+      <div class="ss-grade">{{scoreState.grade}}</div>
+      <div style="color:var(--text);font-size:14px;margin-bottom:8px;">总分：{{scoreState.score}}</div>
+      <div class="ss-breakdown" style="white-space:pre-line;">{{scoreState.breakdown.join('\n')}}</div>
+      <div v-if="gs.hiddenUnlocks&&gs.hiddenUnlocks.length>0" class="ss-hidden">
+        🌟 解锁隐藏内容：{{gs.hiddenUnlocks.join('、')}}
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
+        <button class="btn gold" @click="startNgPlus">🌟 新游戏+</button>
+        <button class="btn" @click="scoreState.active=false;gs.started=false">返回标题</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -882,6 +1021,15 @@ const HERO_DEFS = [
   { id:'douJianDe', name:'窦建德', rank:'SS', title:'河北仁君', desc:'河北义军首领，仁德爱民，深得民心', atk:62, int:71, cmd:78, pol:80, chm:92, costGold:500, costPrestige:150, recruitCond:'仅限剧情招募', skill:'招安纳降', skillDesc:'有40%概率招降敌方30%兵力加入我方', passive:'仁者无敌（民忠自然恢复+2/日，粮食产出+10%）', growth:{atk:1.2,int:2,cmd:2,pol:2.5,chm:2}, favorite:'兵书', expNext:120,
     talkLines:['为百姓而战，老夫虽死无憾。','仁德方能服人，暴政必亡。','主公仁厚，天下可安！','河北百姓托付于主公，望善待之。'] },
 ]
+
+// 武将礼物偏好映射
+const HERO_GIFT_PREFS = {
+  chengYaoJin: 'wine', wangBoDang: 'sword_gift', qinShuba: 'sword_gift',
+  weizhen: 'stationery', qinQiong: 'sword_gift', danXiongXin: 'horse_gift',
+  peiYuanQing: 'sword_gift', liJing: 'book', yuChiGong: 'horse_gift',
+  luoCheng: 'sword_gift', liJi: 'book', houJunJi: 'jade_gift',
+  xueMaoJun: 'jade_gift', xueRenGui: 'sword_gift', douJianDe: 'book',
+}
 
 // ============================================================
 // 武将羁绊系统（双人组合 + 三人桃园）
@@ -1154,6 +1302,63 @@ const MINI_GAMES = [
   { id:'smithy_game', name:'锻造', icon:'⚒', desc:'打造兵器，试炼铁匠技艺', costGold:200, costIron:50, cooldown:12 },
   { id:'maze', name:'迷宫探索', icon:'🗺', desc:'探索神秘迷宫，寻找宝藏', costGold:100, cooldown:18 },
   { id:'fishing', name:'垂钓', icon:'🎣', desc:'寻一处清溪，垂钓修身养性', costGold:0, cooldown:7 },
+]
+
+// 战术道具系统（7种）
+const TACTICAL_ITEMS = [
+  { id:'fire_oil', name:'火油罐', icon:'🔥', desc:'投掷火油罐，造成敌军8%HP火焰伤害', cost:150, use:'combat', eff:'fire_dmg' },
+  { id:'fire_arrow', name:'火箭', icon:'🏹', desc:'点燃箭头，弓兵伤害+30%本场', cost:100, use:'combat', eff:'arrow_boost' },
+  { id:'war_drum', name:'擂鼓', icon:'🥁', desc:'战鼓助威，全军攻击+15%持续3回合', cost:200, use:'combat', eff:'atk_buff' },
+  { id:'disguise', name:'伪装', icon:'🃏', desc:'伪装撤退诱敌，敌方下回合防御-20%', cost:120, use:'combat', eff:'lure' },
+  { id:'medkit', name:'急救包', icon:'💊', desc:'战地急救，恢复全军15%HP', cost:180, use:'combat', eff:'heal' },
+  { id:'ram', name:'攻城槌', icon:'🔨', desc:'攻城利器，本场攻击+25%', cost:250, use:'combat', eff:'siege' },
+  { id:'caltrop', name:'绊马索', icon:'🪢', desc:'布设绊马索，敌方骑兵伤害-30%', cost:130, use:'combat', eff:'anti_cavalry' },
+]
+
+// 礼物系统（8种）
+const GIFTS = [
+  { id:'wine', name:'美酒', icon:'🍶', desc:'陈年佳酿，武人最爱', cost:80, affection:5 },
+  { id:'silk', name:'丝绸', icon:'🧣', desc:'上等丝绸，送礼佳品', cost:100, affection:5 },
+  { id:'book', name:'兵书', icon:'📜', desc:'兵法秘籍，谋士之宝', cost:120, affection:5 },
+  { id:'horse_gift', name:'名马', icon:'🐴', desc:'千里马，武将梦寐以求', cost:200, affection:5 },
+  { id:'sword_gift', name:'宝刀', icon:'⚔', desc:'削铁如泥，英雄最爱', cost:180, affection:5 },
+  { id:'jade_gift', name:'玉佩', icon:'💎', desc:'温润美玉，君子之礼', cost:150, affection:5 },
+  { id:'herb_gift', name:'珍稀药材', icon:'🌿', desc:'千年灵芝，延年益寿', cost:130, affection:5 },
+  { id:'stationery', name:'文房四宝', icon:'✒', desc:'笔墨纸砚，文人雅好', cost:90, affection:5 },
+]
+
+// 坐骑系统（8种）
+const MOUNTS = [
+  { id:'yellow_horse', name:'黄骠马', icon:'🐴', quality:'common', atk:2, spd:1, desc:'秦琼坐骑，日行千里', cost:300 },
+  { id:'dilu', name:'的卢', icon:'🦄', quality:'rare', atk:4, spd:2, desc:'一跃檀溪，救主神驹', cost:800 },
+  { id:'huleibo', name:'忽雷驳', icon:'🌩', quality:'rare', atk:3, spd:2, desc:'秦叔宝坐骑，迅猛如雷', cost:600 },
+  { id:'jueying', name:'绝影', icon:'💨', quality:'epic', atk:6, spd:3, desc:'曹操坐骑，快如闪电', cost:1800 },
+  { id:'claw_huang', name:'爪黄飞电', icon:'⚡', quality:'epic', atk:5, spd:3, desc:'体态雄伟，高贵非凡', cost:1600 },
+  { id:'wu_zhui', name:'乌骓', icon:'🐎', quality:'epic', atk:6, spd:2, desc:'项羽坐骑，力大无穷', cost:2000 },
+  { id:'saluzi', name:'飒露紫', icon:'💜', quality:'legend', atk:7, spd:3, desc:'李世民六骏之首', cost:2500 },
+  { id:'red_hare', name:'赤兔', icon:'🔥', quality:'legend', atk:8, spd:4, desc:'人中吕布，马中赤兔', cost:3000 },
+]
+
+// 消耗品系统（9种）
+const CONSUMABLES = [
+  { id:'heal_pill', name:'金疮药', icon:'💊', desc:'恢复武将30HP', cost:50 },
+  { id:'march_powder', name:'行军散', icon:'🧂', desc:'移速×2持续5日', cost:80 },
+  { id:'ginseng_soup', name:'参汤', icon:'🍵', desc:'全军HP恢复10%', cost:120 },
+  { id:'life_pill', name:'续命丹', icon:'💖', desc:'武将濒死自动复活', cost:500 },
+  { id:'skill_book', name:'技能书', icon:'📖', desc:'武将技能升1级', cost:400 },
+  { id:'exp_pill', name:'经验丹', icon:'💠', desc:'武将+200经验', cost:200 },
+  { id:'loyalty_wine', name:'忠诚酒', icon:'🍷', desc:'武将忠诚+15', cost:150 },
+  { id:'general_seal', name:'将印', icon:'🔮', desc:'突破等级上限', cost:800 },
+  { id:'reset_pill', name:'洗髓丹', icon:'✨', desc:'重置属性点', cost:600 },
+]
+
+// 新手引导步骤
+const TUTORIAL_STEPS = [
+  { id:'t1', title:'第1步·经营起步', text:'欢迎来到隋唐乱世！你需要在此建立屯兵寨。\n\n首先：建造【农田】和【伐木场】，这是生存的基础。点击「经营」标签进入。', highlight:'经营', reward:{gold:200,food:200} },
+  { id:'t2', title:'第2步·招募将士', text:'有了建筑后，点击「军事」标签招募第一位武将。\n\n推荐先招募【程咬金】，他擅长生产，物超所值！', highlight:'军事', reward:{gold:300} },
+  { id:'t3', title:'第3步·训练士兵', text:'武将有了，需要训练士兵来保护寨子。\n\n在军事面板中训练10名步兵，为战斗做准备。', highlight:'军事', reward:{food:300} },
+  { id:'t4', title:'第4步·首战瓦岗', text:'兵力就绪！点击「军事」→「征伐」挑战瓦岗寨。\n\n这是你的第一场战斗，学会使用「推进」按钮进行回合。', highlight:'军事', reward:{gold:500,prestige:30} },
+  { id:'t5', title:'教程完成！', text:'你已经学会了基础操作。剩下的路要靠你自己走了。\n\n击败7大诸侯，问鼎天下！\n\n奖励：金500、粮300、铁100', highlight:'', reward:{gold:500,food:300,iron:100} },
 ]
 
 // 种田匹配牌（8对）
@@ -1456,7 +1661,13 @@ const app = createApp({
       activeBuffs: [],           // 活跃buff [{type,duration,effect}]
       activeFormation: 'square', // 当前阵型
       equipment: [],             // 拥有的装备 [{id,type,...}]
+      mounts: [],                // 拥有的坐骑
+      tacticalItems: {},         // {fire_oil:3, war_drum:2}
+      gifts: {},                 // {wine:5, silk:3}
+      consumables: {},           // {heal_pill:3, exp_pill:2}
       ngPlus: 0,                 // 当前周目数
+      tutorialStep: 0,           // 教程步骤 0=未开始
+      hiddenUnlocks: [],         // 隐藏解锁内容
     })
 
     // 战斗状态
@@ -1492,6 +1703,12 @@ const app = createApp({
     // 钓鱼状态
     const fishingState = reactive({ active:false, phase:'idle', castPower:0, castDir:1,
       fishX:0, hookX:0, fishMoving:false, result:null, castTimer:null })
+
+    // 教程状态
+    const tutorialState = reactive({ active:false, step:0 })
+
+    // 评分状态
+    const scoreState = reactive({ active:false, score:0, grade:'', breakdown:[] })
 
     const hasSave = computed(() => !!localStorage.getItem('stjyc_v1'))
     const totalTroops = computed(() => {
@@ -1939,30 +2156,34 @@ const app = createApp({
     function heroGift(hid) {
       const h = gs.heroes.find(h=>h.id===hid)
       if (!h) return
-      setOpts([
-        { text:`美酒（50金）`, style:'primary', action:()=>{
-          if(gs.gold<50){addStory('钱不够！','warning');return}
-          gs.gold-=50; const bonus=h.favorite==='美酒'?15:5
-          h.affection=Math.min(100,(h.affection||30)+bonus)
-          addStory(`赠送美酒给${h.name}，好感+${bonus}。`,'reward')
-          checkAchievements()
-        }},
-        { text:`名剑（200金）`, style:'primary', action:()=>{
-          if(gs.gold<200){addStory('钱不够！','warning');return}
-          gs.gold-=200; const bonus=h.favorite==='名剑'?25:10
-          h.affection=Math.min(100,(h.affection||30)+bonus)
-          addStory(`赠送名剑给${h.name}，好感+${bonus}。`,'reward')
-          checkAchievements()
-        }},
-        { text:`战马（500金）`, style:'primary', action:()=>{
-          if(gs.gold<500){addStory('钱不够！','warning');return}
-          gs.gold-=500; const bonus=h.favorite==='良马'||h.favorite==='战马'?35:15
-          h.affection=Math.min(100,(h.affection||30)+bonus)
-          addStory(`赠送战马给${h.name}，好感+${bonus}。`,'reward')
-          checkAchievements()
-        }},
-        { text:'取消' }
-      ])
+      if (h._giftToday) { addStory(`${h.name}今天已经收过礼物了。`, 'warning'); return }
+      if (!gs.gifts) gs.gifts = {}
+      // 列出所有有库存的礼物
+      const availGifts = GIFTS.filter(g=>(gs.gifts[g.id]||0)>0)
+      if (availGifts.length === 0) { addStory('没有可送的礼物！请先在「物品」→「礼物」购买。', 'warning'); return }
+      setOpts(availGifts.map(g => {
+        const pref = HERO_GIFT_PREFS[h.id]
+        const isFav = pref === g.id
+        const affGain = isFav ? g.affection + 3 : g.affection
+        return {
+          text: `${g.icon} ${g.name}（×${gs.gifts[g.id]||0}）${isFav?' ⭐喜爱！':''} 好感+${affGain}`,
+          style: 'primary',
+          action: ()=>{
+            gs.gifts[g.id]--
+            h.affection = Math.min(100,(h.affection||30)+affGain)
+            h._giftToday = true
+            h._giftStreak = (h._giftStreak||0) + 1
+            if (h._giftStreak >= 7) {
+              h.affection = Math.min(100,(h.affection||30)+10)
+              h._giftStreak = 0
+              addStory(`🌟 ${h.name}深受感动！「知遇之恩」好感额外+10！`, 'achieve')
+            }
+            if (isFav) addStory(`❤ ${h.name}非常喜欢【${g.name}】！好感+${affGain}`, 'reward')
+            else addStory(`${h.name}收到【${g.name}】，好感+${affGain}`, 'system')
+            checkAchievements()
+          }
+        }
+      }).concat([{ text:'取消' }]))
     }
 
     function checkAutoHeroVisit() {
@@ -2043,10 +2264,19 @@ const app = createApp({
       combat.enemyMaxHp = faction.troopCount * 10; combat.enemyHp = faction.troopCount * 10
       combat.allyMorale = 80; combat.enemyMorale = 100
       combat.win = false
-      setOpts([
+      const initOpts = [
         { text:'发起进攻！', style:'primary', action:doCombatRound },
-        { text:'撤退（中止出征）', style:'danger', action:()=>{ combat.active=false; addStory('大军撤退，本次出征中止。', 'warning') } }
-      ])
+      ]
+      if (gs.tacticalItems) {
+        for (const [tid, count] of Object.entries(gs.tacticalItems)) {
+          if (count > 0) {
+            const ti = TACTICAL_ITEMS.find(t=>t.id===tid)
+            if (ti) initOpts.push({ text:`${ti.icon} ${ti.name}（×${count}）`, style:'gold', action:()=>useTactical(tid) })
+          }
+        }
+      }
+      initOpts.push({ text:'撤退（中止出征）', style:'danger', action:()=>{ combat.active=false; addStory('大军撤退，本次出征中止。', 'warning') } })
+      setOpts(initOpts)
     }
 
     function doCombatRound() {
@@ -2129,10 +2359,20 @@ const app = createApp({
         clearOpts()
       } else {
         const hpPct = Math.floor(combat.enemyHp / combat.enemyMaxHp * 100)
-        setOpts([
+        const opts = [
           { text:`继续进攻（敌方HP: ${hpPct}%）`, style:'primary', action:doCombatRound },
-          { text:'战略撤退', style:'danger', action:()=>{ combat.active=false; addStory('撤退！我军有序撤离。','warning') } }
-        ])
+        ]
+        // 添加可用战术道具
+        if (gs.tacticalItems) {
+          for (const [tid, count] of Object.entries(gs.tacticalItems)) {
+            if (count > 0) {
+              const ti = TACTICAL_ITEMS.find(t=>t.id===tid)
+              if (ti) opts.push({ text:`${ti.icon} ${ti.name}（×${count}）`, style:'gold', action:()=>useTactical(tid) })
+            }
+          }
+        }
+        opts.push({ text:'战略撤退', style:'danger', action:()=>{ combat.active=false; addStory('撤退！我军有序撤离。','warning') } })
+        setOpts(opts)
       }
     }
 
@@ -2177,17 +2417,20 @@ const app = createApp({
           addStory('──────────────────────────────────', 'divider')
           addStory('🏆 结局：开创新朝！你的名字永载史册！', 'achieve')
           unlockAchieve('secret_dynasty')
+          setTimeout(()=>calculateScore(), 2000)
         }},
         { text:'辅佐明主，功成身退', action:()=>{
           addStory('你将玉玺献于明主，洒然归隐山林。', 'reward')
           addStory('──────────────────────────────────', 'divider')
           addStory('🌟 结局：功成身退！史书留名，天下称颂！', 'achieve')
           unlockAchieve('secret_retire')
+          setTimeout(()=>calculateScore(), 2000)
         }},
         { text:'拥兵自重，割据一方', action:()=>{
           addStory('你保留军队，割据一方，与天下诸侯并立。', 'reward')
           addStory('──────────────────────────────────', 'divider')
           addStory('⚔ 结局：割据诸侯！此后天下，三分鼎立！', 'achieve')
+          setTimeout(()=>calculateScore(), 2000)
         }},
       ])
     }
@@ -2765,6 +3008,8 @@ const app = createApp({
           if (gs.minigameCooldowns[k] > 0) gs.minigameCooldowns[k]--
         }
       }
+      // 每日重置送礼标记
+      for (const h of gs.heroes) { h._giftToday = false }
     }
 
     function getBuffProdMod() {
@@ -2885,8 +3130,14 @@ const app = createApp({
         activeBuffs:gs.activeBuffs||[],
         activeFormation:gs.activeFormation||'square',
         equipment:gs.equipment||[],
+        mounts:gs.mounts||[],
+        tacticalItems:gs.tacticalItems||{},
+        gifts:gs.gifts||{},
+        consumables:gs.consumables||{},
         caravanCooldown:gs.caravanCooldown||0,
         ngPlus:gs.ngPlus||0,
+        tutorialStep:gs.tutorialStep||0,
+        hiddenUnlocks:gs.hiddenUnlocks||[],
       }
       localStorage.setItem('stjyc_v1', JSON.stringify(data))
       addStory('💾 游戏已保存！', 'system')
@@ -2912,6 +3163,9 @@ const app = createApp({
           }
         }
         if (d.equipment) gs.equipment = d.equipment
+        if (d.mounts) gs.mounts = d.mounts
+        if (d.tacticalItems) gs.tacticalItems = d.tacticalItems
+        if (d.hiddenUnlocks) gs.hiddenUnlocks = d.hiddenUnlocks
         const diffBonus = 1 + gs.ngPlus * 0.15
         FACTIONS.forEach(f=>{ f.powerReq = Math.floor(f.powerReq * diffBonus); f.troopCount = Math.floor(f.troopCount * diffBonus) })
         addStory('🌟 新游戏+已启动！', 'achieve')
@@ -2946,8 +3200,14 @@ const app = createApp({
           activeBuffs:d.activeBuffs||[],
           activeFormation:d.activeFormation||'square',
           equipment:d.equipment||[],
+          mounts:d.mounts||[],
+          tacticalItems:d.tacticalItems||{},
+          gifts:d.gifts||{},
+          consumables:d.consumables||{},
           caravanCooldown:d.caravanCooldown||0,
           ngPlus:d.ngPlus||0,
+          tutorialStep:d.tutorialStep||0,
+          hiddenUnlocks:d.hiddenUnlocks||[],
         })
         gs.started = true
         addStory('📂 读档成功！聚义事业继续…', 'reward')
@@ -2973,8 +3233,9 @@ const app = createApp({
         achievements:[],
         totalExploreCount:0, totalTravelPoints:0, festivalsExperienced:[],
         storyProgress:[], advancedTroops:{}, ritualCooldown:0,
-        minigameCooldowns:{}, activeBuffs:[], activeFormation:'square',
-        equipment:[], caravanCooldown:0, ngPlus:0,
+        minigameCooldowns:{}, activeBuffs:[],         activeFormation:'square',
+        equipment:[], mounts:[], tacticalItems:{}, gifts:{}, consumables:{},
+        caravanCooldown:0, ngPlus:0, tutorialStep:0, hiddenUnlocks:[],
       })
       addStory('═'.repeat(32))
       addStory('大业七年，隋炀帝暴政，天下大乱。', 'narrate')
@@ -2985,6 +3246,7 @@ const app = createApp({
       addStory(`难度：${['普通','困难','地狱'][['normal','hard','hell'].indexOf(diff)]} | 初始：金${gs.gold} 粮${gs.food}`, 'system')
       addStory('提示：先建造建筑生产资源，训练兵力，再招募武将，激活羁绊！', 'system')
       setOpts([
+        { text:'📖 开始新手教程', style:'gold', action:()=>startTutorial() },
         { text:'建造第一座建筑', style:'primary', action:()=>{ activeTab.value='build'; addStory('打开建造面板，先造一座农田或伐木场！','system') }},
         { text:'先查看武将', action:()=>{ activeTab.value='heroes'; addStory('查看可招募武将。','system') }},
         { text:'了解羁绊系统', action:()=>{ addStory('武将羁绊：当特定武将组合同时在队时自动激活，提供强力战斗加成！','system'); addStory('例：秦琼+尉迟恭=门神守护（全军防御+30%）','system'); addStory('共11组羁绊，尽可能激活获得最大加成！','system') }}
@@ -3322,12 +3584,285 @@ const app = createApp({
       localStorage.setItem('stjyc_ngplus', JSON.stringify(data))
     }
 
+    // ---- 战术道具系统 ----
+    function buyTactical(itemId) {
+      const item = TACTICAL_ITEMS.find(t=>t.id===itemId)
+      if (!item) return
+      if (gs.gold < item.cost) { addStory('金币不足！','warning'); return }
+      gs.gold -= item.cost
+      if (!gs.tacticalItems) gs.tacticalItems = {}
+      gs.tacticalItems[itemId] = (gs.tacticalItems[itemId]||0) + 1
+      addStory(`购买了【${item.name}】（×${gs.tacticalItems[itemId]}）`, 'reward')
+    }
+
+    function useTactical(itemId) {
+      if (!combat.active || combat.phase !== 'fighting') { addStory('只能在战斗中使用！','warning'); return }
+      if (!gs.tacticalItems || !gs.tacticalItems[itemId] || gs.tacticalItems[itemId] <= 0) { addStory('没有该道具！','warning'); return }
+      const item = TACTICAL_ITEMS.find(t=>t.id===itemId)
+      if (!item) return
+      gs.tacticalItems[itemId]--
+      addStory(`🔥 使用【${item.name}】！`, 'reward')
+      switch(item.eff) {
+        case 'fire_dmg': combat.enemyHp = Math.max(0, combat.enemyHp - Math.floor(combat.enemyMaxHp*0.08)); addStory(`敌军受火焰灼烧，损失8%HP！(-${Math.floor(combat.enemyMaxHp*0.08)})`,'reward'); break
+        case 'arrow_boost': addBuff('fire_arrow','火箭加持','🏹',{arrow_atk:0.30},99); addStory('弓兵伤害+30%本场！','reward'); break
+        case 'atk_buff': addBuff('war_drum','擂鼓助威','🥁',{all_atk:0.15},3); addStory('全军攻击+15%持续3回合！','reward'); break
+        case 'lure': addBuff('disguise','诱敌深入','🃏',{enemy_def:-0.20},1); addStory('敌军下回合防御-20%！','reward'); break
+        case 'heal': combat.allyHp = Math.min(combat.allyMaxHp, combat.allyHp + Math.floor(combat.allyMaxHp*0.15)); addStory(`急救生效，恢复15%HP！(+${Math.floor(combat.allyMaxHp*0.15)})`,'reward'); break
+        case 'siege': addBuff('ram','攻城槌','🔨',{all_atk:0.25},99); addStory('攻城槌就位，攻击+25%本场！','reward'); break
+        case 'anti_cavalry': addBuff('caltrop','绊马索','🪢',{enemy_cav:-0.30},99); addStory('绊马索布设完毕，敌方骑兵-30%！','reward'); break
+      }
+    }
+
+    // ---- 礼物系统 ----
+    function buyGift(giftId) {
+      const gift = GIFTS.find(g=>g.id===giftId)
+      if (!gift) return
+      if (!gs.gifts) gs.gifts = {}
+      // 购买
+      if (gs.gold >= gift.cost) {
+        gs.gold -= gift.cost
+        gs.gifts[giftId] = (gs.gifts[giftId]||0) + 1
+        addStory(`购买了【${gift.name}】（×${gs.gifts[giftId]}）`, 'reward')
+      } else {
+        // 已有库存则送给武将
+        if ((gs.gifts[giftId]||0) > 0) giveGiftToHero(giftId)
+        else { addStory('金币不足或没有库存！','warning') }
+      }
+    }
+
+    function giveGiftToHero(giftId) {
+      const gift = GIFTS.find(g=>g.id===giftId)
+      if (!gift || (gs.gifts[giftId]||0) <= 0) return
+      const heroes = gs.heroes.filter(h=>!h._giftToday)
+      if (heroes.length === 0) { addStory('今天所有武将都已送过礼了。','warning'); return }
+      setOpts(heroes.map(h => {
+        const pref = HERO_GIFT_PREFS[h.id]
+        const isFav = pref === giftId
+        const affGain = isFav ? gift.affection + 3 : gift.affection
+        return {
+          text: `${h.name} ${isFav?'⭐喜爱！':''}好感+${affGain}`,
+          style: 'primary',
+          action: () => {
+            gs.gifts[giftId]--
+            h.affection = (h.affection||0) + affGain
+            h._giftToday = true
+            // 连续送礼计数
+            h._giftStreak = (h._giftStreak||0) + 1
+            if (h._giftStreak >= 7) {
+              h.affection += 10
+              h._giftStreak = 0
+              addStory(`🌟 ${h.name}深受感动！「知遇之恩」好感额外+10！`, 'achieve')
+            }
+            if (isFav) addStory(`❤ ${h.name}非常喜欢【${gift.name}】！好感+${affGain}`, 'reward')
+            else addStory(`${h.name}收到【${gift.name}】，好感+${affGain}`, 'system')
+          }
+        }
+      }).concat([{ text:'取消' }]))
+    }
+
+    // 每日重置送礼标记（已在tickBuffs中处理）
+
+    // ---- 坐骑系统 ----
+    function buyMountItem(mountId) {
+      const mount = MOUNTS.find(m=>m.id===mountId)
+      if (!mount || gs.gold < mount.cost) { addStory('金币不足！','warning'); return }
+      gs.gold -= mount.cost
+      if (!gs.mounts) gs.mounts = []
+      gs.mounts.push({...mount})
+      addStory(`获得坐骑：【${mount.icon}${mount.name}】！`, 'reward')
+    }
+
+    function equipMount(heroId, mountIdx) {
+      const hero = gs.heroes.find(h=>h.id===heroId)
+      if (!hero || !gs.mounts || mountIdx >= gs.mounts.length) return
+      // 卸旧
+      if (hero.mount) {
+        const old = MOUNTS.find(m=>m.id===hero.mount)
+        if (old) gs.mounts.push({...old})
+      }
+      const mount = gs.mounts[mountIdx]
+      hero.mount = mount.id
+      gs.mounts.splice(mountIdx, 1)
+      addStory(`${hero.name}骑上了【${mount.name}】！`, 'reward')
+    }
+
+    function checkLevelUp(hero) {
+      if (!hero || !hero.expNext) return
+      while (hero.exp >= hero.expNext && (hero.level||1) < (hero.maxLevel||20)) {
+        hero.level = (hero.level||1) + 1
+        hero.exp -= hero.expNext
+        hero.expNext = Math.floor(hero.expNext * 1.5)
+        // 升级属性
+        hero.atk = Math.floor((hero.atk||50) * 1.05)
+        hero.def = Math.floor((hero.def||30) * 1.05)
+        addStory(`⬆ ${hero.name}升级至Lv${hero.level}！属性提升！`, 'achieve')
+        checkAchievements()
+      }
+    }
+
+    function unequipMount(heroId) {
+      const hero = gs.heroes.find(h=>h.id===heroId)
+      if (!hero || !hero.mount) return
+      const mountDef = MOUNTS.find(m=>m.id===hero.mount)
+      if (mountDef) {
+        gs.mounts.push({...mountDef})
+        addStory(`${hero.name}让【${mountDef.name}】回马厩休息。`, 'system')
+      }
+      delete hero.mount
+    }
+
+    function showMountPicker(heroId) {
+      if (!gs.mounts || gs.mounts.length === 0) { addStory('没有可用坐骑！请先在「物品」→「坐骑」购买。','warning'); return }
+      setOpts(gs.mounts.map((m,idx) => ({
+        text: `${m.icon} ${m.name} [${m.quality}] 攻+${m.atk} 速+${m.spd}`,
+        style: 'primary',
+        action: ()=> equipMount(heroId, idx)
+      })).concat([{ text:'取消' }]))
+    }
+
+    function getHeroMount(heroId) {
+      const hero = gs.heroes.find(h=>h.id===heroId)
+      if (!hero || !hero.mount) return null
+      return MOUNTS.find(m=>m.id===hero.mount) || null
+    }
+
+    // ---- 消耗品系统 ----
+    function buyConsumable(itemId) {
+      const item = CONSUMABLES.find(c=>c.id===itemId)
+      if (!item || gs.gold < item.cost) { addStory('金币不足！','warning'); return }
+      gs.gold -= item.cost
+      if (!gs.consumables) gs.consumables = {}
+      gs.consumables[itemId] = (gs.consumables[itemId]||0) + 1
+      addStory(`获得消耗品：【${item.name}】（×${gs.consumables[itemId]}）`, 'reward')
+    }
+
+    function useConsumable(itemId) {
+      const item = CONSUMABLES.find(c=>c.id===itemId)
+      if (!item || !gs.consumables || (gs.consumables[itemId]||0) <= 0) { addStory('没有该消耗品！','warning'); return }
+      // 需要选择目标的
+      if (['skill_book','exp_pill','loyalty_wine','general_seal','reset_pill'].includes(itemId)) {
+        setOpts(gs.heroes.map(h => ({
+          text: `${h.name} [Lv${h.level||1}]`,
+          style: 'primary',
+          action: () => applyConsumable(itemId, item, h)
+        })).concat([{ text:'取消' }]))
+      } else {
+        applyConsumable(itemId, item, null)
+      }
+    }
+
+    function applyConsumable(itemId, item, hero) {
+      if (!gs.consumables || (gs.consumables[itemId]||0) <= 0) return
+      gs.consumables[itemId]--
+      switch(itemId) {
+        case 'heal_pill':
+          if (hero) { hero.hp = Math.min(hero.maxHp||100, (hero.hp||100)+30); addStory(`${hero.name}使用金疮药，HP+30！`,'reward') }
+          else { addStory('请选择武将使用！','warning'); return }
+          break
+        case 'march_powder': addBuff('march','行军散','🧂',{speed_x2:true},5); addStory('移动速度×2持续5日！','reward'); break
+        case 'ginseng_soup': if (combat.active) { combat.allyHp=Math.min(combat.allyMaxHp,combat.allyHp+Math.floor(combat.allyMaxHp*0.1)); addStory('全军HP恢复10%！','reward') } else { addStory('只能在战斗中使用！','warning'); return } break
+        case 'life_pill': addBuff('life_pill','续命丹','💖',{auto_revive:true},99); addStory('武将濒死时将自动复活！','reward'); break
+        case 'skill_book':
+          if (hero) { hero.skillLv = (hero.skillLv||1)+1; addStory(`${hero.name}技能【${hero.skill}】升至Lv${hero.skillLv}！`,'achieve') }
+          break
+        case 'exp_pill': if (hero) { hero.exp=(hero.exp||0)+200; checkLevelUp(hero); addStory(`${hero.name}获得200经验！`,'reward') } break
+        case 'loyalty_wine': if (hero) { hero.loyalty=Math.min(100,(hero.loyalty||50)+15); addStory(`${hero.name}忠诚度+15！`,'reward') } break
+        case 'general_seal':
+          if (hero) {
+            if ((hero.level||1) < (hero.maxLevel||20)) { addStory(`${hero.name}还未达到等级上限！`,'warning'); return }
+            hero.maxLevel = (hero.maxLevel||20) + 5
+            hero._broken = true
+            addStory(`🌟 ${hero.name}突破等级上限！现可升至Lv${hero.maxLevel}！`,'achieve')
+          }
+          break
+        case 'reset_pill': if (hero) { /* 简化：重随属性 */ addStory(`${hero.name}使用了洗髓丹，感悟颇深！`,'system') } break
+      }
+    }
+
+    // ---- 教程系统 ----
+    function startTutorial() {
+      if (gs.tutorialStep >= TUTORIAL_STEPS.length) return
+      tutorialState.active = true
+      tutorialState.step = gs.tutorialStep
+    }
+
+    function nextTutorialStep() {
+      const stepDef = TUTORIAL_STEPS[tutorialState.step]
+      if (stepDef && stepDef.reward) {
+        if (stepDef.reward.gold) gs.gold += stepDef.reward.gold
+        if (stepDef.reward.food) gs.food += stepDef.reward.food
+        if (stepDef.reward.iron) gs.iron += stepDef.reward.iron
+        if (stepDef.reward.prestige) gs.prestige += stepDef.reward.prestige
+        addStory(`🎓 教程奖励：${JSON.stringify(stepDef.reward)}`,'reward')
+      }
+      tutorialState.step++
+      gs.tutorialStep = tutorialState.step
+      if (tutorialState.step >= TUTORIAL_STEPS.length) {
+        tutorialState.active = false
+        addStory('📖 教程完成！开始你的霸业吧！','achieve')
+      }
+    }
+
+    function skipTutorial() {
+      tutorialState.active = false
+      gs.tutorialStep = TUTORIAL_STEPS.length
+      addStory('教程已跳过。如有需要可在系统面板重新开始。','system')
+    }
+
+    // ---- 评分系统 ----
+    function calculateScore() {
+      const defeated = gs.defeatedFactions.filter(f=>!f.startsWith('_'))
+      let score = 0
+      const bd = []
+      // 基础分
+      const factionScore = defeated.length * 1000
+      score += factionScore; bd.push(`击败势力 ${defeated.length}/7: +${factionScore}`)
+      const heroScore = gs.heroes.length * 200
+      score += heroScore; bd.push(`招募武将 ${gs.heroes.length}人: +${heroScore}`)
+      const bldScore = gs.buildings.reduce((s,b)=>s+(b.lvl||1)*50, 0)
+      score += bldScore; bd.push(`建筑等级总分: +${bldScore}`)
+      // 加成
+      if (gs.loyalty >= 95) { score += 500; bd.push('民心≥95: +500') }
+      const allFactions = defeated.length >= 7
+      if (allFactions) { score += 2000; bd.push('统一天下: +2000') }
+      const achScore = gs.achievements.length * 50
+      score += achScore; bd.push(`成就 ${gs.achievements.length}个: +${achScore}`)
+      // 难度加成
+      const diffMult = gs.difficulty==='hell'?1.5:(gs.difficulty==='hard'?1.2:1.0)
+      score = Math.floor(score * diffMult)
+      bd.push(`难度系数 ×${diffMult}`)
+      // 等级
+      let grade = 'B'
+      if (score >= 8000) grade = 'SSS'
+      else if (score >= 6000) grade = 'SS'
+      else if (score >= 4000) grade = 'S'
+      else if (score >= 2500) grade = 'A'
+      bd.push(`最终评定: ${grade}`)
+      // 隐藏解锁
+      if (!gs.hiddenUnlocks) gs.hiddenUnlocks = []
+      if (grade === 'SSS' && !gs.hiddenUnlocks.includes('虬髯客')) {
+        gs.hiddenUnlocks.push('虬髯客(隐藏武将)')
+      }
+      if (grade >= 'SS' && !gs.hiddenUnlocks.includes('凌烟阁')) {
+        gs.hiddenUnlocks.push('凌烟阁(隐藏建筑)')
+      }
+      if (gs.achievements.length >= 30 && !gs.hiddenUnlocks.includes('突厥汗国')) {
+        gs.hiddenUnlocks.push('突厥汗国(隐藏势力)')
+      }
+      scoreState.active = true
+      scoreState.score = score
+      scoreState.grade = grade
+      scoreState.breakdown = bd
+      saveNgPlus()
+    }
+
     const TABS = [
       { id:'village',  label:'🏯 山寨' },
       { id:'build',    label:'🏗 建造' },
       { id:'heroes',   label:'👥 武将' },
       { id:'military', label:'⚔ 军事' },
       { id:'map',      label:'🗺 大地图' },
+      { id:'items',    label:'🎒 物品' },
       { id:'minigame', label:'🎮 小游戏' },
       { id:'tech',     label:'🔬 科技' },
       { id:'achieve',  label:'🏆 成就' },
@@ -3370,6 +3905,18 @@ const app = createApp({
       fishingState, FISH_TYPES, startFishing, stopCast, reelFish, closeFishing,
       // 新游戏+
       startNgPlus, loadNgPlus, hasNgPlusSave,
+      // 战术道具
+      TACTICAL_ITEMS, buyTactical, useTactical,
+      // 礼物
+      GIFTS, HERO_GIFT_PREFS, buyGift,
+      // 坐骑
+      MOUNTS, buyMountItem, equipMount, unequipMount, getHeroMount, showMountPicker,
+      // 消耗品
+      CONSUMABLES, buyConsumable, useConsumable,
+      // 教程
+      TUTORIAL_STEPS, tutorialState, startTutorial, nextTutorialStep, skipTutorial,
+      // 评分
+      scoreState, calculateScore,
     }
   }
 })
