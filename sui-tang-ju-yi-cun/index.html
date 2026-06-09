@@ -289,7 +289,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
     <button class="btn" @click="startGame('hell')">地狱模式</button>
     <button v-if="hasSave" class="btn" style="margin-top:16px;border-color:var(--gold-dim);" @click="loadGame">继续游戏</button>
     <button v-if="hasNgPlusSave()" class="btn" style="margin-top:16px;border-color:var(--accent);" @click="loadNgPlus">🌟 新游戏+</button>
-    <div class="version">v1.4 | 隋唐聚义村 · 新增战术道具/礼物/坐骑/消耗品/教程/评分</div>
+    <div class="version">v1.5 | 隋唐聚义村 · 新增30地图/商战赛马/6结局/建筑连锁/季节效果/50+事件</div>
   </div>
 
   <!-- 游戏界面 -->
@@ -304,7 +304,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
       <div class="stat-item"><span class="lbl">人口</span><span class="val">{{gs.population}}</span></div>
       <div class="stat-item"><span class="lbl">民忠</span><span class="val">{{gs.loyalty}}</span></div>
       <div class="stat-item" v-if="activeBondsCount>0"><span class="lbl">羁绊</span><span class="val" style="color:var(--purple)">{{activeBondsCount}}</span></div>
-      <div class="stat-item" v-if="gs.achievements.length>0"><span class="lbl">成就</span><span class="val" style="color:#f0a03a">{{gs.achievements.length}}/36</span></div>
+      <div class="stat-item" v-if="gs.achievements.length>0"><span class="lbl">成就</span><span class="val" style="color:#f0a03a">{{gs.achievements.length}}/40</span></div>
       <div class="date-info">第{{gs.year}}年 · {{SEASONS[gs.season-1]}} · 第{{gs.dayInSeason}}日 | {{WEATHERS[gs.weather].icon}}{{WEATHERS[gs.weather].name}}</div>
     </div>
 
@@ -341,7 +341,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
               <div>🏗 已建建筑：{{gs.buildings.length}}座</div>
               <div>⚔ 已征讨势力：{{gs.defeatedFactions.filter(f=>!f.startsWith('_')).length}}/7</div>
               <div>🔮 激活羁绊：{{activeBondsCount}}组</div>
-              <div>🏆 获得成就：{{gs.achievements.length}}/36</div>
+              <div>🏆 获得成就：{{gs.achievements.length}}/40</div>
+            </div>
+            <!-- 建筑连锁加成 -->
+            <div v-if="getActiveAdjacencyNames().length>0" style="margin-bottom:8px;padding:6px 10px;background:#1a1408;border:1px solid var(--gold-dim);font-size:12px;color:var(--gold);">
+              🏗 建筑连锁：{{getActiveAdjacencyNames().join('、')}} 已激活！
             </div>
             <div v-for="b in gs.buildings" :key="b.id" class="card">
               <div class="cname">{{b.name}} <span style="color:var(--gold-dim)">Lv.{{b.level}}</span>
@@ -665,7 +669,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
 
           <!-- 成就面板 -->
           <div v-if="activeTab==='achieve'">
-            <div class="section-title">🏆 成就系统 <span style="font-size:13px;color:var(--text-dim)">{{gs.achievements.length}}/36</span></div>
+            <div class="section-title">🏆 成就系统 <span style="font-size:13px;color:var(--text-dim)">{{gs.achievements.length}}/40</span></div>
             <div v-for="cat in ACHIEVE_CATS" :key="cat.id">
               <div style="color:var(--gold-dim);font-size:13px;margin:10px 0 5px;padding-bottom:3px;border-bottom:1px solid var(--border);">{{cat.icon}} {{cat.name}}</div>
               <div v-for="ach in ACHIEVEMENTS.filter(a=>a.cat===cat.id)" :key="ach.id" :class="['card', gs.achievements.includes(ach.id)?'achieve-done':'locked']">
@@ -747,7 +751,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
               <div>已征讨势力：{{gs.defeatedFactions.filter(f=>!f.startsWith('_')).join('、')||'无'}}</div>
               <div>已探索地点：{{gs.exploredLocations.length}}处</div>
               <div>激活羁绊：{{activeBondsCount}}组</div>
-              <div>获得成就：{{gs.achievements.length}}/36</div>
+              <div>获得成就：{{gs.achievements.length}}/40</div>
             </div>
           </div>
 
@@ -841,6 +845,73 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
             <button class="btn-sm gold" @click="doTourneyRound">开始下一轮</button>
           </div>
         </div>
+      </template>
+
+      <!-- 商战 -->
+      <template v-if="miniGame.type==='trade_war'">
+        <template v-if="tradeWarState.phase==='select'">
+          <div class="mg-info">选择一种商品囤货，价低买高价卖，时机很重要！</div>
+          <div v-for="(g,i) in tradeWarState.goods" :key="g.id" class="caravan-item" style="cursor:pointer;" @click="tradeWarInvest(i)">
+            <div><span style="font-size:18px;">{{g.icon}}</span> <span class="ci-name">{{g.name}}</span></div>
+            <div class="ci-cost">当前市价：{{g.price}}金</div>
+          </div>
+        </template>
+        <template v-if="tradeWarState.phase==='trading'||tradeWarState.phase==='result'">
+          <div class="mg-info" v-if="tradeWarState.invested">
+            📈 持有【{{tradeWarState.invested.name}}】买入价：{{tradeWarState.invested.boughtAt}}金 | 第{{tradeWarState.turns}}/{{tradeWarState.maxTurns}}轮
+          </div>
+          <div style="max-height:200px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);padding:6px;font-size:12px;font-family:monospace;">
+            <div v-for="(m,i) in tradeWarState.market" :key="i" style="margin:2px 0;">
+              第{{m.turn}}轮：
+              <span v-for="(p,j) in m.prices" :key="j" style="margin-left:6px;">
+                {{tradeWarState.goods[j]?.icon}}<span :style="{color:p>tradeWarState.goods[j]?.basePrice?'var(--red-bright)':p<tradeWarState.goods[j]?.basePrice?'var(--green-bright)':'var(--text)'}">{{p}}</span>
+              </span>
+            </div>
+          </div>
+          <div v-if="tradeWarState.phase==='trading'" style="text-align:center;margin-top:10px;">
+            <button class="btn-sm gold" @click="tradeWarNextTurn">下一轮</button>
+            <button class="btn-sm" style="margin-left:8px;" @click="tradeWarNextTurn();tradeWarState.turns=tradeWarState.maxTurns-1">立即结算</button>
+          </div>
+          <div v-if="tradeWarState.phase==='result'" style="text-align:center;margin-top:10px;">
+            <button class="btn-sm gold" @click="closeMiniGame">完成</button>
+          </div>
+        </template>
+      </template>
+
+      <!-- 赛马 -->
+      <template v-if="miniGame.type==='horse_race'">
+        <template v-if="horseRaceState.phase==='bet'">
+          <div class="mg-info">选择一匹赛马下注（底注{{horseRaceState.betAmount}}金）</div>
+          <div v-for="(h,i) in horseRaceState.horses" :key="i" class="tourney-fighter" style="cursor:pointer;" @click="horseRacePlaceBet(i)">
+            <div>
+              <span style="font-size:22px;">{{h.icon}}</span>
+              <span class="tf-name" :style="{color:h.color}">{{h.name}}</span>
+            </div>
+            <div class="tf-stats">{{h.stats}}</div>
+          </div>
+          <div style="text-align:center;margin-top:8px;">
+            <button class="btn-sm" @click="horseRaceState.betAmount+=50">+50注</button>
+            <span style="margin:0 8px;color:var(--gold-dim);">{{horseRaceState.betAmount}}金</span>
+            <button class="btn-sm" @click="horseRaceState.betAmount=Math.max(50,horseRaceState.betAmount-50)">-50注</button>
+          </div>
+        </template>
+        <template v-if="horseRaceState.phase==='racing'||horseRaceState.phase==='result'">
+          <div v-if="!horseRaceState.raceDone" class="mg-info">🏁 比赛进行中…</div>
+          <div v-else class="mg-info">🏁 比赛结束！</div>
+          <div style="background:var(--bg);border:1px solid var(--border);padding:10px;border-radius:4px;margin:10px 0;">
+            <div v-for="(h,i) in horseRaceState.horses" :key="i" style="margin:6px 0;display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px;">{{h.icon}}</span>
+              <span :style="{color:h.color,fontWeight:'bold',fontSize:'13px',width:'60px'}">{{h.name}}</span>
+              <div style="flex:1;height:16px;background:var(--bg);border:1px solid var(--border);position:relative;border-radius:2px;overflow:hidden;" :style="{boxShadow:horseRaceState.winner===i&&horseRaceState.raceDone?'0 0 8px var(--gold)':''}">
+                <div :style="{width:horseRaceState.positions[i]+'%',height:'100%',background:h.color,borderRadius:'2px',transition:'width .3s'}"></div>
+              </div>
+            </div>
+          </div>
+          <div v-if="horseRaceState.raceDone" style="text-align:center;margin-top:10px;">
+            <div style="color:var(--gold);font-size:14px;margin-bottom:8px;">🏆 冠军：【{{horseRaceState.horses[horseRaceState.winner].name}}】！</div>
+            <button class="btn-sm gold" @click="closeMiniGame">完成</button>
+          </div>
+        </template>
       </template>
     </div>
   </div>
@@ -956,6 +1027,12 @@ const { createApp, reactive, computed, nextTick, ref } = Vue
 // ============================================================
 
 const SEASONS = ['春','夏','秋','冬']
+const SEASON_EFFECTS = {
+  1: { foodMod:1.20, goldMod:1.0, combatAtk:1.0, combatSpd:1.0, desc:'春耕时节，粮食丰收' },
+  2: { foodMod:1.0, goldMod:1.0, combatAtk:0.9, combatSpd:1.0, desc:'酷暑难耐，军队战力下降' },
+  3: { foodMod:1.30, goldMod:1.0, combatAtk:1.1, combatSpd:1.0, desc:'秋高马肥，五谷丰登' },
+  4: { foodMod:0.60, goldMod:0.80, combatAtk:1.0, combatSpd:0.8, desc:'寒冬腊月，百业萧条' },
+}
 const SEASON_FESTIVALS = {
   1: { day: 7, name:'元宵佳节', event:'festival_lantern' },
   2: { day: 5, name:'端午节', event:'festival_dragon' },
@@ -988,6 +1065,30 @@ const BLD_DEFS = [
   { id:'clinic', name:'医馆', icon:'🏥', desc:'提升战后伤兵恢复速度', costGold:200, costWood:60, outputType:'heal', unlockFaction:null, unlockBld:'guildhall', unlockBldLevel:3, unlockDesc:'需聚义厅Lv3', buildDays:2 },
   { id:'altar', name:'祭坛', icon:'🕍', desc:'每日增加威望，可举行祭祀', costGold:500, costWood:200, costIron:50, outputType:'prestige', baseOutput:5, unlockFaction:null, unlockBld:'guildhall', unlockBldLevel:5, unlockDesc:'需聚义厅Lv5', buildDays:5 },
 ]
+
+// 建筑连锁加成规则
+const BLD_ADJACENCY = [
+  { ids:['farm','house'], name:'农舍傍田', desc:'粮食产出+10%', bonus:{food:0.10} },
+  { ids:['lumber','mine'], name:'林矿协作', desc:'木材+5%，铁矿+5%', bonus:{wood:0.05,iron:0.05} },
+  { ids:['smithy','barrack'], name:'军工一体', desc:'训练费用-5%', bonus:{train_disc:0.05} },
+  { ids:['stable','barrack'], name:'骑营配合', desc:'骑兵训练费-10%', bonus:{cav_train_disc:0.10} },
+  { ids:['clinic','barrack'], name:'医营相连', desc:'训练伤亡-10%', bonus:{train_casualty:-0.10} },
+  { ids:['market','tavern','pawnshop'], name:'市集繁华', desc:'全商铺收入+20%', bonus:{shop_income:0.20}, requireAll:true },
+]
+function getBldAdjacencyBonus() {
+  const bonuses = { food:0, wood:0, iron:0, train_disc:0, cav_train_disc:0, train_casualty:0, shop_income:0 }
+  const activeBlds = gs.buildings.map(b=>b.id)
+  for (const adj of BLD_ADJACENCY) {
+    if (adj.ids.every(id=>activeBlds.includes(id))) {
+      for (const [k,v] of Object.entries(adj.bonus)) bonuses[k] += v
+    }
+  }
+  return bonuses
+}
+function getActiveAdjacencyNames() {
+  const activeBlds = gs.buildings.map(b=>b.id)
+  return BLD_ADJACENCY.filter(adj=>adj.ids.every(id=>activeBlds.includes(id))).map(a=>a.name)
+}
 
 const HERO_DEFS = [
   { id:'chengYaoJin', name:'程咬金', rank:'S', title:'福将', desc:'三板斧打天下，豪爽仗义', atk:75, int:45, cmd:70, pol:40, chm:65, costGold:200, costPrestige:0, recruitCond:null, skill:'三板斧', skillDesc:'对敌前排造成120%伤害', passive:'福将（受伤-15%）', growth:{atk:2,int:0.5,cmd:1.5,pol:0.5,chm:1}, favorite:'美酒', expNext:100,
@@ -1167,8 +1268,13 @@ const ACHIEVEMENTS = [
   { id:'secret_xu', cat:'hidden', name:'军师驾到', desc:'徐茂公主动来访并成功招募', reward:'战斗预判能力提升', hidden:true },
   { id:'secret_festival', cat:'hidden', name:'岁时佳节', desc:'经历全部4个节日庆典', reward:'节日期间产出+30%', hidden:true },
   { id:'secret_dynasty', cat:'hidden', name:'开国之君', desc:'选择开创新朝结局', reward:'解锁新游戏+模式', hidden:true },
-  { id:'secret_retire', cat:'hidden', name:'功成身退', desc:'选择归隐山林结局', reward:'解锁悠哉模式', hidden:true },
+  { id:'secret_retire', cat:'hidden', name:'功成身退', desc:'选择功成身退结局', reward:'解锁悠哉模式', hidden:true },
+  { id:'secret_lingyan', cat:'hidden', name:'凌烟阁首', desc:'威望800+率8武将入选凌烟阁', reward:'所有武将初始忠诚+20', hidden:true },
+  { id:'secret_hermit', cat:'hidden', name:'桃源隐士', desc:'选择归隐山林结局', reward:'初始资源减免50%', hidden:true },
+  { id:'secret_death', cat:'hidden', name:'壮烈成仁', desc:'战死沙场，全军覆没', reward:'战斗结算奖励+50%', hidden:true },
   { id:'forge_god', cat:'hidden', name:'神匠天赋', desc:'锻造出绝世神兵', reward:'铁匠铺打造品质提升', hidden:true },
+  { id:'secret_merchant', cat:'hidden', name:'商业奇才', desc:'商战中一单净赚300金以上', reward:'商铺收入+25%', hidden:true },
+  { id:'secret_gambler', cat:'hidden', name:'赛马伯乐', desc:'赛马中一次赢得500金以上', reward:'商队交易价格优惠15%', hidden:true },
 ]
 
 const TROOP_TYPES = {
@@ -1225,16 +1331,42 @@ const FACTIONS = [
 ]
 
 const MAP_LOCATIONS = [
+  // === 主城（7个，含势力据点） ===
   { id:'taiyuan', name:'太原', icon:'🏯', desc:'起始地，你的根据地', x:5, y:2, distance:0, canExplore:false, factionId:null, events:['商队路过','民间奇才','山贼骚扰'] },
   { id:'wagang_mtn', name:'瓦岗山', icon:'⛰', desc:'瓦岗寨所在地，险峻易守难攻', x:7, y:4, distance:2, canExplore:true, factionId:'wagang', events:['伏兵埋伏','粮草来源'] },
-  { id:'luoyang', name:'洛阳', icon:'🏙', desc:'中原重镇，王世充盘踞', x:6, y:5, distance:3, canExplore:true, factionId:'wangshichong', events:['洛阳宫变','商贾云集'] },
+  { id:'luoyang', name:'洛阳', icon:'🏙', desc:'中原重镇，王世充盘踞', x:6, y:5, distance:3, canExplore:true, factionId:'wangshichong', events:['洛阳宫变','商贾云集','运河商路'] },
   { id:'hebei', name:'河北', icon:'🌾', desc:'窦建德根基，民心所向', x:8, y:3, distance:4, canExplore:true, factionId:'doujiantian', events:['义民来投','粮草丰收'] },
   { id:'jiangdu', name:'江都', icon:'🌊', desc:'隋炀帝旧都，宇文化及占据', x:9, y:7, distance:6, canExplore:true, factionId:'yuwenhuaji', events:['皇宫宝藏','火铳兵来投'] },
   { id:'jianghuai', name:'江淮', icon:'🐟', desc:'水网密布，杜伏威割据', x:10, y:8, distance:7, canExplore:true, factionId:'dufuwei', events:['水军训练','江湖好汉'] },
   { id:'shanxi_fw', name:'太原以北', icon:'🏔', desc:'刘武周控制区，突厥频繁', x:5, y:1, distance:5, canExplore:true, factionId:'liuwuzhou', events:['突厥骑兵','良马发现'] },
-  { id:'changan', name:'长安', icon:'👑', desc:'帝都，李渊最终据点', x:3, y:5, distance:8, canExplore:true, factionId:'liyuan', events:['宫廷阴谋','名将来投'] },
+  { id:'changan', name:'长安', icon:'👑', desc:'帝都，李渊最终据点', x:3, y:5, distance:8, canExplore:true, factionId:'liyuan', events:['宫廷阴谋','名将来投','帝陵密道'] },
+
+  // === 次要地点（18个，探索事件） ===
+  { id:'hanzhong', name:'汉中', icon:'🏔', desc:'蜀道咽喉，物产丰饶', x:2, y:6, distance:6, canExplore:true, factionId:null, events:['蜀中商路','盐井发现','铁矿山脉'] },
+  { id:'chengdu', name:'成都', icon:'🌸', desc:'天府之国，富庶安宁', x:1, y:7, distance:9, canExplore:true, factionId:null, events:['蜀锦贸易','盐铁管制','都江堰水利'] },
+  { id:'xiangyang', name:'襄阳', icon:'🏯', desc:'兵家必争之地，水陆要冲', x:5, y:7, distance:6, canExplore:true, factionId:null, events:['兵家论战','匠人云集'] },
+  { id:'yangzhou', name:'扬州', icon:'⛵', desc:'东南都会，商贾云集', x:7, y:8, distance:9, canExplore:true, factionId:null, events:['江南富商','海外来客','盐商争利'] },
+  { id:'kaifeng', name:'开封', icon:'🏛', desc:'汴水之畔，中原商都', x:8, y:5, distance:6, canExplore:true, factionId:null, events:['运河枢纽','粮仓重地'] },
+  { id:'saiwai', name:'塞外草原', icon:'🏕', desc:'突厥势力范围，茫茫草原', x:6, y:0, distance:7, canExplore:true, factionId:null, events:['突厥部落','天马行空'] },
+  { id:'dongbei', name:'辽东', icon:'❄', desc:'苦寒之地，猛将辈出', x:11, y:2, distance:8, canExplore:true, factionId:null, events:['高句丽商队','雪地练兵'] },
   { id:'wuling', name:'五岭山脉', icon:'🌿', desc:'深山老林，隐世高人', x:2, y:8, distance:5, canExplore:true, factionId:null, events:['隐士传授','珍贵药材','古代遗迹'] },
   { id:'silk_road', name:'丝路起点', icon:'🐪', desc:'商贸要地，异域商队频繁', x:1, y:3, distance:6, canExplore:true, factionId:null, events:['异域商贸','战马交易','奇珍异宝'] },
+  { id:'hexi', name:'河西走廊', icon:'🏜', desc:'丝路要冲，西域门户', x:0, y:3, distance:8, canExplore:true, factionId:null, events:['西域商队','汗血宝马','胡旋舞姬'] },
+  { id:'qingzhou', name:'青州', icon:'🌊', desc:'齐鲁之地，盐铁重镇', x:11, y:4, distance:8, canExplore:true, factionId:null, events:['盐场扩产','水军招募'] },
+  { id:'jingzhou', name:'荆州', icon:'⛩', desc:'长江重镇，天下粮仓', x:4, y:8, distance:8, canExplore:true, factionId:null, events:['水师演练','粮道之争','云梦泽猎'] },
+  { id:'yuzhou', name:'豫州', icon:'🌾', desc:'中原腹地，人口众多', x:7, y:6, distance:5, canExplore:true, factionId:null, events:['流民募兵','铁矿发现'] },
+  { id:'liangzhou', name:'凉州', icon:'🏔', desc:'西北边陲，羌胡杂居', x:1, y:2, distance:7, canExplore:true, factionId:null, events:['羌人市集','良马牧场'] },
+  { id:'bingzhou', name:'并州', icon:'⛰', desc:'表里山河，关中屏障', x:4, y:3, distance:4, canExplore:true, factionId:null, events:['太行匪患','铁矿储备'] },
+  { id:'xu_zhou', name:'徐州', icon:'🏚', desc:'四战之地，兵家必争', x:9, y:5, distance:7, canExplore:true, factionId:null, events:['粮草囤积','溃兵收拢'] },
+  { id:'jianan', name:'建安', icon:'⛩', desc:'闽中重镇，山高林密', x:9, y:9, distance:11, canExplore:true, factionId:null, events:['造船工匠','茶叶贸易'] },
+  { id:'jiangxia', name:'江夏', icon:'🚢', desc:'长江咽喉，水军重镇', x:6, y:8, distance:8, canExplore:true, factionId:null, events:['造船之术','水战兵法'] },
+
+  // === 特殊地点（5个） ===
+  { id:'zhongnan_mtn', name:'终南山', icon:'☯', desc:'隐士圣地，传闻有仙人', x:3, y:4, distance:6, canExplore:true, factionId:null, events:['阴阳传承','炼丹奇术','仙人指路'], special:true },
+  { id:'shaolin', name:'少林寺', icon:'🛕', desc:'天下武功出少林', x:6, y:4, distance:5, canExplore:true, factionId:null, events:['武学传授','棍僧来投'], special:true },
+  { id:'penglai', name:'蓬莱仙岛', icon:'🏝', desc:'海外仙山，传说仙药所出', x:12, y:3, distance:10, canExplore:true, factionId:null, events:['仙药传说','海市蜃楼'], special:true },
+  { id:'under_market', name:'地下黑市', icon:'🕳', desc:'法外之地，万物可交易', x:4, y:6, distance:7, canExplore:true, factionId:null, events:['黑市交易','刺客雇佣','禁术卷轴'], special:true },
+  { id:'sui_tomb', name:'隋帝陵', icon:'🪦', desc:'隋炀帝陵寝，机关重重', x:8, y:6, distance:7, canExplore:true, factionId:null, events:['古墓机关','帝陵宝藏'], special:true },
 ]
 
 const TECH_DEFS = [
@@ -1291,6 +1423,34 @@ const RANDOM_EVENTS = [
   { id:'good_weather', type:'nature', text:'连日好天气，寨中众人干劲十足！', options:['鼓励生产（全产出+20%持续5日）'], effect:[{prod_buff:5}] },
   { id:'hermit', type:'explore', text:'发现了一位隐居的老人，自称精通奇门遁甲。', options:['诚心拜师（金-200，随机升级一项科技）','礼貌告辞'], effect:[{gold:-200,rand_tech:1},{}] },
   { id:'wild_horses', type:'explore', text:'附近山野中发现了一群野马！', options:['派人捕捉（骑兵+20）','放任自然（威望+3）'], effect:[{cavalry_add:20},{prestige:3}] },
+  // v1.5 新增事件（20+种）
+  // 经济类（5种）
+  { id:'foreign_merchant', type:'economy', text:'高句丽商人带来稀世珍宝，出价极高。', options:['高额购入（金-500，宝物+1）','婉拒（威望+5）'], effect:[{gold:-500,treasure:1},{prestige:5}] },
+  { id:'land_tax', type:'economy', text:'周遭郡县请求归附，愿纳年贡换取保护。', options:['接受归附（金+200/每季，威望+20）','保持现状'], effect:[{gold:200,prestige:20},{}] },
+  { id:'salt_monopoly', type:'economy', text:'你掌握了一条私盐渠道，利润可观。', options:['秘密运作（金+800，但有风险）','充公入官（威望+25）'], effect:[{gold:800},{prestige:25}] },
+  { id:'grain_hoard', type:'economy', text:'一名粮商囤积了大量粮食，愿折价出售。', options:['大量买入（金-300，粮+500）','小量采购（金-100，粮+150）'], effect:[{gold:-300,food:500},{gold:-100,food:150}] },
+  { id:'mine_discovery', type:'economy', text:'探矿队在附近发现了一座富铁矿脉！', options:['立即开采（铁矿+300）','谨慎开发（铁矿+150，威望+10）'], effect:[{iron:300},{iron:150,prestige:10}] },
+  // 灾害类（4种）
+  { id:'flood', type:'disaster', text:'连日暴雨，山洪暴发，冲毁部分设施！', options:['全力抗洪（木-150，粮-100）','撤离转移（人口-8，威望-15）'], effect:[{wood:-150,food:-100},{population_loss:8,prestige:-15}] },
+  { id:'blizzard', type:'disaster', text:'暴雪封锁了山路，物资无法运输！', options:['组织铲雪（人口-3日工，金-100）','停运等待（粮-200）'], effect:[{population_loss:1,gold:-100},{food:-200}] },
+  { id:'plague', type:'disaster', text:'瘟疫从远方传来，寨中人心惶惶！', options:['封锁隔离（威望-10，控制疫情）','请医救治（金-800，人口保全）'], effect:[{prestige:-10},{gold:-800}] },
+  { id:'earthquake', type:'disaster', text:'大地震动，数十里可见！建筑严重受损！', options:['全力抢修（金-400，木-200）','组织避灾（威望-20）'], effect:[{gold:-400,wood:-200},{prestige:-20}] },
+  // 军事类（4种）
+  { id:'siege_event', type:'military', text:'一支不明军队突然围困了你的寨子！', options:['主动出击（开战，兵数决定胜负）','坚守待援（消耗金-200，粮-300）'], effect:[{battle_event:1},{gold:-200,food:-300}] },
+  { id:'war_drum_discover', type:'military', text:'古战场遗迹中发现了一面军用战鼓！', options:['修复使用（士气+10%持续30日）','留作纪念（威望+10）'], effect:[{morale_buff:30},{prestige:10}] },
+  { id:'engineer', type:'military', text:'一名巧匠设计了一种新型攻城器械！', options:['出资制造（金-500，攻城伤害+20%）','图纸入库（科技经验+1）'], effect:[{gold:-500,siege_buff:1},{tech_exp:1}] },
+  { id:'night_ambush', type:'military', text:'夜间有敌军小队袭扰你的哨站！', options:['设伏反击（步兵+30）','加强巡逻（防御+15%持续5日）'], effect:[{infantry_add:30},{defense_buff:5}] },
+  // 武将类（4种）
+  { id:'hero_duel', type:'hero', text:'一名神秘剑客挑战你的最强武将！', options:['接受单挑（胜则威望+30，败则武将伤）','婉拒（威望+5）'], effect:[{prestige:30},{prestige:5}] },
+  { id:'hero_romance', type:'hero', text:'你的武将中有一对暗自倾心…', options:['撮合姻缘（忠诚度+15，士气+5%）','默许发展'], effect:[{hero_loyalty:15,morale_buff:1},{}] },
+  { id:'master_arrives', type:'hero', text:'一位名满天下的隐士专程来访求见。', options:['以师礼相待（随机升级一武将技能）','请教天下大势（威望+20）'], effect:[{hero_skill_up:1},{prestige:20}] },
+  { id:'hero_dream', type:'hero', text:'你的首席武将夜梦神人指点，能力飙升！', options:['加官进爵（忠诚+20，威望+15）'], effect:[{hero_level_up:2,prestige:15}] },
+  // 探索类（4种）
+  { id:'cave_treasure', type:'explore', text:'山洞中发现了一个巨大的石室，满地金银！', options:['装车运回（金+1500，威望+30）','上报朝廷（威望+50）'], effect:[{gold:1500,prestige:30},{prestige:50}] },
+  { id:'battlefield', type:'explore', text:'古战场之上，空气中仍有杀气弥漫。', options:['祭奠亡灵（威望+15，民忠+5）','搜寻遗物（获得随机装备）'], effect:[{prestige:15,loyalty:5},{rand_equip:1}] },
+  { id:'hermit_herb', type:'nature', text:'一位采药老人在绝壁上发现了千年灵芝。', options:['高价收购（金-300，全体武将生命+10%）','以礼待之（威望+5）'], effect:[{gold:-300,hero_hp_boost:1},{prestige:5}] },
+  { id:'rainbow_omen', type:'nature', text:'双彩虹横跨天际，百姓视为祥瑞之兆！', options:['大摆宴席庆贺（金-200，威望+25，民忠+10）','记录此吉兆（威望+15）'], effect:[{gold:-200,prestige:25,loyalty:10},{prestige:15}] },
+  { id:'comet', type:'nature', text:'夜空中出现了一颗彗星，众人议论纷纷。', options:['解为大吉（威望+10）','慎独修身（民忠+3）'], effect:[{prestige:10},{loyalty:3}] },
 ]
 
 // ============================================================
@@ -1302,6 +1462,8 @@ const MINI_GAMES = [
   { id:'smithy_game', name:'锻造', icon:'⚒', desc:'打造兵器，试炼铁匠技艺', costGold:200, costIron:50, cooldown:12 },
   { id:'maze', name:'迷宫探索', icon:'🗺', desc:'探索神秘迷宫，寻找宝藏', costGold:100, cooldown:18 },
   { id:'fishing', name:'垂钓', icon:'🎣', desc:'寻一处清溪，垂钓修身养性', costGold:0, cooldown:7 },
+  { id:'trade_war', name:'商战', icon:'💼', desc:'与各地商贾竞争，囤货居奇赚取暴利', costGold:300, cooldown:10 },
+  { id:'horse_race', name:'赛马', icon:'🏇', desc:'观赛下注，赛马决胜', costGold:100, cooldown:8 },
 ]
 
 // 战术道具系统（7种）
@@ -1703,6 +1865,10 @@ const app = createApp({
     // 钓鱼状态
     const fishingState = reactive({ active:false, phase:'idle', castPower:0, castDir:1,
       fishX:0, hookX:0, fishMoving:false, result:null, castTimer:null })
+    // 商战状态
+    const tradeWarState = reactive({ phase:'select', goods:[], market:[], invested:null, turns:0, maxTurns:6 })
+    // 赛马状态
+    const horseRaceState = reactive({ phase:'bet', horses:[], betOn:-1, betAmount:0, raceDone:false, winner:-1, positions:[] })
 
     // 教程状态
     const tutorialState = reactive({ active:false, step:0 })
@@ -2306,7 +2472,8 @@ const app = createApp({
       // 我方伤害
       const techBonus = 1 + (gs.tech['infantry_tech']||0)*0.05 + (gs.tech['cavalry_tech']||0)*0.04
       const heroBonus = 1 + gs.heroes.length * 0.03
-      const atkMult = 1 + bondBonus.atkBonus + formationAtkMod
+      const seasonCombat = SEASON_EFFECTS[gs.season] || {combatAtk:1,combatSpd:1}
+      const atkMult = 1 + bondBonus.atkBonus + formationAtkMod + (seasonCombat.combatAtk-1)
       const baseDmg = Math.max(10, Math.floor(myPower.value * 0.4 * techBonus * heroBonus * atkMult * (combat.allyMorale/100)))
       const dmg = baseDmg + Math.floor(Math.random()*baseDmg*0.3 - baseDmg*0.15)
       combat.enemyHp = Math.max(0, combat.enemyHp - dmg)
@@ -2357,6 +2524,19 @@ const app = createApp({
         gs.troops.infantry = Math.max(0, gs.troops.infantry - loss)
         gs.prestige = Math.max(0, gs.prestige - 20)
         clearOpts()
+        // 战死沙场结局：兵力全部损失且已征讨过半势力
+        const totalArmy = Object.values(gs.troops).reduce((a,b)=>a+b, 0)
+        const defeatedCount = gs.defeatedFactions.filter(f=>!f.startsWith('_')).length
+        if (totalArmy <= 0 && defeatedCount >= 4) {
+          setTimeout(()=>{
+            addStory('──────────────────────────────────', 'divider')
+            addStory('💀 沙场之上，你已力竭，身边将士全部倒下…', 'narrate')
+            addStory('你的名字，将永远铭刻在这片你用鲜血染红的土地上。', 'narrate')
+            addStory('🩸 结局：战死沙场！英雄壮烈，虽死犹荣！', 'achieve')
+            unlockAchieve('secret_death')
+            setTimeout(()=>calculateScore(), 2000)
+          }, 1500)
+        }
       } else {
         const hpPct = Math.floor(combat.enemyHp / combat.enemyMaxHp * 100)
         const opts = [
@@ -2411,28 +2591,55 @@ const app = createApp({
       addStory('天下已平，传国玉玺在手，万众归心。', 'narrate')
       addStory('你站在长安城楼之上，俯瞰着这片历经战火的土地。', 'narrate')
       addStory('你将如何面对这个全新的天下？', 'narrate')
-      setOpts([
-        { text:'开创新朝，自立为帝', style:'primary', action:()=>{
-          addStory('你宣告建立新王朝，天下归一，万民欢腾！', 'reward')
+      const opts = [
+        { text:'自立为帝，开创新朝', style:'primary', action:()=>{
+          gs.chosenEnding = 'dynasty'
+          addStory('你宣告建立新王朝，登基称帝，天下归一，万民欢腾！', 'reward')
           addStory('──────────────────────────────────', 'divider')
-          addStory('🏆 结局：开创新朝！你的名字永载史册！', 'achieve')
+          addStory('👑 结局：开创新朝！你的名字永载史册！', 'achieve')
           unlockAchieve('secret_dynasty')
           setTimeout(()=>calculateScore(), 2000)
         }},
-        { text:'辅佐明主，功成身退', action:()=>{
-          addStory('你将玉玺献于明主，洒然归隐山林。', 'reward')
+      ]
+      // 凌烟阁结局 — 最高荣誉，需威望>=800且武将>=8且击败全部势力
+      if (gs.prestige >= 800 && gs.heroes.length >= 8 && gs.defeatedFactions.filter(f=>!f.startsWith('_')).length >= 7) {
+        opts.push({ text:'受封凌烟阁，位列至尊', style:'primary', action:()=>{
+          gs.chosenEnding = 'lingyan'
+          addStory('天子亲下诏书，敕你入凌烟阁，位列大唐朝臣之首！', 'reward')
+          addStory('你的画像悬挂于凌烟阁中，供后世万代敬仰。', 'reward')
           addStory('──────────────────────────────────', 'divider')
-          addStory('🌟 结局：功成身退！史书留名，天下称颂！', 'achieve')
+          addStory('🏛 结局：凌烟阁二十四功臣之首！万古流芳！', 'achieve')
+          unlockAchieve('secret_lingyan')
+          setTimeout(()=>calculateScore(), 2000)
+        }})
+      }
+      opts.push(
+        { text:'辅佐明主，功成身退', action:()=>{
+          gs.chosenEnding = 'retire'
+          addStory('你将玉玺献于明主，洒然辞官归隐。史书留名，天下称颂。', 'reward')
+          addStory('──────────────────────────────────', 'divider')
+          addStory('🌟 结局：功成身退！事了拂衣去，深藏功与名。', 'achieve')
           unlockAchieve('secret_retire')
           setTimeout(()=>calculateScore(), 2000)
         }},
+        { text:'挂印归田，隐入山林', action:()=>{
+          gs.chosenEnding = 'hermit'
+          addStory('你将玉玺埋于终南山，带着亲信之人遁入山林，从此不问世事。', 'narrate')
+          addStory('江湖传言，终南山中有隐世仙人，其实就是你…', 'narrate')
+          addStory('──────────────────────────────────', 'divider')
+          addStory('🏔 结局：归隐山林！乱世英豪，终入桃源。', 'achieve')
+          unlockAchieve('secret_hermit')
+          setTimeout(()=>calculateScore(), 2000)
+        }},
         { text:'拥兵自重，割据一方', action:()=>{
-          addStory('你保留军队，割据一方，与天下诸侯并立。', 'reward')
+          gs.chosenEnding = 'warlord'
+          addStory('你保留军队，拥兵自重，割据一方，与天下诸侯并立。', 'reward')
           addStory('──────────────────────────────────', 'divider')
           addStory('⚔ 结局：割据诸侯！此后天下，三分鼎立！', 'achieve')
           setTimeout(()=>calculateScore(), 2000)
         }},
-      ])
+      )
+      setOpts(opts)
     }
 
     // ---- 大地图 ----
@@ -2481,19 +2688,22 @@ const app = createApp({
     }
 
     function renderMap() {
-      const rows = 11
-      const cols = 14
+      const rows = 12
+      const cols = 16
       const grid = Array(rows).fill(null).map(()=>Array(cols).fill('  '))
       for (const loc of MAP_LOCATIONS) {
         if (loc.x < cols && loc.y < rows) {
           const isExplored = gs.exploredLocations.includes(loc.id)
           const isCur = loc.name === gs.location
           const isEnemy = loc.factionId && !gs.defeatedFactions.includes(loc.factionId)
+          const isSpecial = loc.special
+          let icon = loc.icon
+          if (isSpecial && !isExplored) icon = '✨'
           const tag = isCur
-            ? `<span class="cur">[${loc.icon}]</span>`
+            ? `<span class="cur">[${icon}]</span>`
             : isExplored
-              ? (isEnemy ? `<span class="enemy">[${loc.icon}]</span>` : `<span class="explored">[${loc.icon}]</span>`)
-              : `<span style="color:var(--border)">[?]</span>`
+              ? (isEnemy ? `<span class="enemy">[${icon}]</span>` : `<span class="explored">[${icon}]</span>`)
+              : isSpecial ? `<span style="color:#f0a03a">[?]</span>` : `<span style="color:var(--border)">[?]</span>`
           grid[loc.y][loc.x] = tag
         }
       }
@@ -2640,16 +2850,18 @@ const app = createApp({
       const wm = WEATHERS[gs.weather]
       const bondProdBonus = 1 + getBondProdBonus()
       const buffProdMod = getBuffProdMod()
+      const adjBonus = getBldAdjacencyBonus() // 建筑连锁加成
+      const shopMod = 1 + adjBonus.shop_income // 商铺加成
       for (const b of gs.buildings) {
         if (b.underConstruction) continue
         const def = BLD_DEFS.find(d=>d.id===b.id)
         if (!def) continue
         const heroBoost = getHeroBoost(b)
         const base = Math.floor((def.baseOutput||0) * b.level * (1+heroBoost) * bondProdBonus * buffProdMod)
-        if (def.outputType==='food') foodProd += Math.floor(base * wm.foodMod * getAgriBonus())
-        else if (def.outputType==='wood') woodProd += Math.floor(base*0.5)
-        else if (def.outputType==='iron') ironProd += Math.floor(base*0.3)
-        else if (def.outputType==='gold') goldProd += base
+        if (def.outputType==='food') foodProd += Math.floor(base * wm.foodMod * getAgriBonus() * (1+adjBonus.food) * (SEASON_EFFECTS[gs.season]?.foodMod||1))
+        else if (def.outputType==='wood') woodProd += Math.floor(base*0.5 * (1+adjBonus.wood))
+        else if (def.outputType==='iron') ironProd += Math.floor(base*0.3 * (1+adjBonus.iron))
+        else if (def.outputType==='gold') goldProd += Math.floor(base * shopMod * (SEASON_EFFECTS[gs.season]?.goldMod||1))
         else if (def.outputType==='prestige') prestigeProd += base
       }
       goldProd += Math.floor(gs.population * 0.3 + gs.prestige * 0.1)
@@ -2795,6 +3007,8 @@ const app = createApp({
         case 'maze': initMaze(); break
         case 'tourney': initTourney(); break
         case 'fishing': startFishing(); break
+        case 'trade_war': initTradeWar(); break
+        case 'horse_race': initHorseRace(); break
       }
       // 设置冷却
       if (!gs.minigameCooldowns) gs.minigameCooldowns = {}
@@ -2805,6 +3019,8 @@ const app = createApp({
       miniGame.active = false; miniGame.type = ''; miniGame.data = null
       farmTiles.length = 0; smithyState.forging = false
       mazeState.score = 0; mazeState.steps = 0; mazeState.visited = []
+      tradeWarState.phase = 'select'; tradeWarState.market = []; tradeWarState.invested = null
+      horseRaceState.phase = 'bet'; horseRaceState.raceDone = false
     }
 
     // ---- 种田 (翻牌匹配) ----
@@ -3235,7 +3451,7 @@ const app = createApp({
         storyProgress:[], advancedTroops:{}, ritualCooldown:0,
         minigameCooldowns:{}, activeBuffs:[],         activeFormation:'square',
         equipment:[], mounts:[], tacticalItems:{}, gifts:{}, consumables:{},
-        caravanCooldown:0, ngPlus:0, tutorialStep:0, hiddenUnlocks:[],
+        caravanCooldown:0, ngPlus:0, tutorialStep:0, hiddenUnlocks:[], chosenEnding:null,
       })
       addStory('═'.repeat(32))
       addStory('大业七年，隋炀帝暴政，天下大乱。', 'narrate')
@@ -3530,6 +3746,124 @@ const app = createApp({
         if (!gs.minigameCooldowns) gs.minigameCooldowns = {}
         gs.minigameCooldowns['fishing'] = def.cooldown
       }
+    }
+
+    // ---- 商战 ---- 
+    const TRADE_GOODS = [
+      { id:'silk', name:'丝绸', icon:'🧣', basePrice:80, vol:0.4 },
+      { id:'iron_good', name:'铁器', icon:'⚒', basePrice:60, vol:0.3 },
+      { id:'grain_good', name:'粮食', icon:'🌾', basePrice:40, vol:0.5 },
+      { id:'horse_good', name:'战马', icon:'🐴', basePrice:120, vol:0.35 },
+      { id:'salt', name:'盐', icon:'🧂', basePrice:50, vol:0.25 },
+    ]
+    function initTradeWar() {
+      tradeWarState.phase = 'select'
+      tradeWarState.turns = 0
+      tradeWarState.invested = null
+      tradeWarState.goods = TRADE_GOODS.map(g=>({...g, price: g.basePrice}))
+      tradeWarState.market = []
+    }
+    function tradeWarInvest(goodIdx) {
+      const g = tradeWarState.goods[goodIdx]
+      tradeWarState.invested = { ...g, boughtAt: g.price, idx: goodIdx }
+      tradeWarState.phase = 'trading'
+      tradeWarState.market = [{ turn:0, prices: tradeWarState.goods.map(g=>g.price) }]
+      addStory(`投入${g.price}金囤积【${g.name}】，密切关注市场动向…`, 'event')
+    }
+    function tradeWarNextTurn() {
+      if (tradeWarState.turns >= tradeWarState.maxTurns) {
+        // 结算
+        const g = tradeWarState.invested
+        const finalPrice = tradeWarState.goods[g.idx].price
+        const profit = finalPrice - g.boughtAt
+        const total = Math.floor(profit * 5)
+        tradeWarState.phase = 'result'
+        tradeWarState.market.push({ turn: tradeWarState.turns+1, prices: tradeWarState.goods.map(g=>g.price) })
+        if (total > 0) {
+          gs.gold += total
+          addStory(`商战结算：${g.name}买入价${g.boughtAt}→卖出价${finalPrice}，净赚**${total}金**！`, 'reward')
+          if (total>=300) unlockAchieve('secret_merchant')
+        } else if (total === 0) {
+          addStory(`商战结算：${g.name}市价未变，保本无利。`, 'system')
+        } else {
+          gs.gold = Math.max(0, gs.gold + total)
+          addStory(`商战亏损：${g.name}价格下跌，亏损**${Math.abs(total)}金**…`, 'warning')
+        }
+        return
+      }
+      tradeWarState.turns++
+      // 价格波动
+      tradeWarState.goods.forEach(g => {
+        const change = (Math.random() - 0.48) * g.vol * g.basePrice
+        g.price = Math.max(10, Math.floor(g.price + change))
+      })
+      tradeWarState.market.push({ turn: tradeWarState.turns, prices: tradeWarState.goods.map(g=>g.price) })
+    }
+
+    // ---- 赛马 ----
+    const HORSES = [
+      { name:'绝影', icon:'🐎', stats:'速度★★★★ 耐力★★★ 爆发★★', color:'#7ab8f5', speedBase:14, stamina:0.7, burst:0.6 },
+      { name:'的卢', icon:'🐎', stats:'速度★★★ 耐力★★★★ 爆发★★★', color:'#5dbd6a', speedBase:12, stamina:0.85, burst:0.7 },
+      { name:'赤兔', icon:'🐎', stats:'速度★★★★★ 耐力★★ 爆发★★★★★', color:'#e74c3c', speedBase:16, stamina:0.55, burst:0.9 },
+      { name:'爪黄飞电', icon:'🐎', stats:'速度★★★ 耐力★★★ 爆发★★★', color:'#f0a03a', speedBase:13, stamina:0.7, burst:0.7 },
+    ]
+    function initHorseRace() {
+      horseRaceState.phase = 'bet'
+      horseRaceState.horses = HORSES
+      horseRaceState.betOn = -1
+      horseRaceState.betAmount = 50
+      horseRaceState.raceDone = false
+      horseRaceState.winner = -1
+      horseRaceState.positions = []
+    }
+    function horseRacePlaceBet(hIdx) {
+      if (gs.gold < horseRaceState.betAmount) { addStory('金币不足！', 'warning'); return }
+      gs.gold -= horseRaceState.betAmount
+      horseRaceState.betOn = hIdx
+      horseRaceState.phase = 'racing'
+      horseRaceState.positions = [0,0,0,0]
+      horseRaceState.raceDone = false
+      addStory(`押注${horseRaceState.betAmount}金买【${HORSES[hIdx].name}】获胜！`, 'event')
+      // 开始赛跑
+      runHorseRace()
+    }
+    function runHorseRace() {
+      let round = 0
+      const interval = setInterval(() => {
+        round++
+        let allFinished = true
+        for (let i = 0; i < 4; i++) {
+          if (horseRaceState.positions[i] < 100) {
+            const h = HORSES[i]
+            let advance = h.speedBase * 0.7 + Math.random() * h.speedBase * 0.6
+            if (Math.random() < h.burst) advance *= 1.8
+            if (horseRaceState.positions[i] > 60 && Math.random() < h.stamina) advance *= 1.2
+            horseRaceState.positions[i] = Math.min(100, Math.floor(horseRaceState.positions[i] + advance))
+            allFinished = false
+          }
+        }
+        if (allFinished || round > 30) {
+          clearInterval(interval)
+          // 判定冠军
+          let maxPos = 0, winnerIdx = 0
+          for (let i = 0; i < 4; i++) {
+            if (horseRaceState.positions[i] > maxPos) { maxPos = horseRaceState.positions[i]; winnerIdx = i }
+          }
+          horseRaceState.winner = winnerIdx
+          horseRaceState.raceDone = true
+          horseRaceState.phase = 'result'
+          if (horseRaceState.betOn === winnerIdx) {
+            // 根据赔率计算
+            const odds = horseRaceState.betOn === 2 ? 2.5 : (horseRaceState.betOn === 0 ? 3 : 4)
+            const winnings = Math.floor(horseRaceState.betAmount * odds)
+            gs.gold += winnings
+            addStory(`🏇 【${HORSES[winnerIdx].name}】率先冲过终点！你赢了**${winnings}金**！`, 'reward')
+            if (winnings>=500) unlockAchieve('secret_gambler')
+          } else {
+            addStory(`🏇 【${HORSES[winnerIdx].name}】夺冠…你押注的【${HORSES[horseRaceState.betOn].name}】未能取胜。`, 'warning')
+          }
+        }
+      }, 350)
     }
 
     // ---- 新游戏+ ----
@@ -3874,11 +4208,12 @@ const app = createApp({
       achieveToast,
       hasSave, totalTroops, myPower, recruitableHeroes, accessibleLocations,
       activeHeroBonds, activeBondsCount,
-      SEASONS, WEATHERS, BLD_DEFS, HERO_DEFS, TROOP_TYPES, FACTIONS, MAP_LOCATIONS, TECH_DEFS, TABS,
+      SEASONS, WEATHERS, SEASON_EFFECTS, BLD_DEFS, HERO_DEFS, TROOP_TYPES, FACTIONS, MAP_LOCATIONS, TECH_DEFS, TABS,
       HERO_BONDS, ACHIEVEMENTS, ACHIEVE_CATS,
       fmt, addStory, setOpts, clearOpts, chooseOpt, confirmAct,
       hasBld, bldLevel, getBldName, getBldNameById, getHeroName, isUnlocked, canBuildNew, buildNew,
       getBldUpgradeCost, getBldUpgradeDays, canUpgradeBld, upgradeBld, getBldEffect, assignHeroToBld,
+      BLD_ADJACENCY, getBldAdjacencyBonus, getActiveAdjacencyNames,
       isHeroUnlocked, canRecruit, recruitHero, heroAssign, heroTalk, heroGift,
       isBondActive, getHeroBondTags, getBondCombatSummary,
       trainTroops, initFactionBattle, doCombatRound,
@@ -3886,10 +4221,14 @@ const app = createApp({
       getTechCost, canResearch, researchTech,
       advanceDay, saveGame, loadGame, startGame,
       // 小游戏
-      miniGame, farmTiles, mazeState, tourneyState, smithyState,
+      miniGame, farmTiles, mazeState, tourneyState, smithyState, tradeWarState, horseRaceState,
       MINI_GAMES, SMITHY_GRADES, MAZE_MAP,
       startMiniGame, closeMiniGame, flipFarmTile,
       mazeMove, doTourneyRound, initSmithy,
+      // 商战
+      tradeWarInvest, tradeWarNextTurn,
+      // 赛马
+      horseRacePlaceBet,
       // 祭祀
       RITUALS, doRitual,
       // 高级兵种
