@@ -387,7 +387,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
     <button class="btn" @click="startGame('hell')">地狱模式</button>
     <button v-if="hasSave" class="btn" style="margin-top:16px;border-color:var(--gold-dim);" @click="loadGame">继续游戏</button>
     <button v-if="hasNgPlusSave()" class="btn" style="margin-top:16px;border-color:var(--accent);" @click="loadNgPlus">🌟 新游戏+</button>
-    <div class="version">v1.6 | 隋唐聚义村 · 响应式UI/手机平板适配/建筑连锁/季节效果/50+事件</div>
+    <div class="version">v1.7 | 隋唐聚义村 · 大地图70+探索事件/特殊地点深度剧情/商路贸易</div>
   </div>
 
   <!-- 游戏界面 -->
@@ -1468,6 +1468,326 @@ const MAP_LOCATIONS = [
   { id:'under_market', name:'地下黑市', icon:'🕳', desc:'法外之地，万物可交易', x:4, y:6, distance:7, canExplore:true, factionId:null, events:['黑市交易','刺客雇佣','禁术卷轴'], special:true },
   { id:'sui_tomb', name:'隋帝陵', icon:'🪦', desc:'隋炀帝陵寝，机关重重', x:8, y:6, distance:7, canExplore:true, factionId:null, events:['古墓机关','帝陵宝藏'], special:true },
 ]
+
+// ============================================================
+// 大地图探索事件池（v1.7，30地点×2~3事件≈70+事件）
+// ============================================================
+const EXPLORE_EVENTS = {
+  /* 太原 */
+  taiyuan: [
+    { id:'ty_barracks', text:'你在太原郊外发现一座废弃军营，尚存一些物资。', opts:[
+      {text:'搜刮物资（铁矿+60，木材+40）', effect:{iron:60,wood:40}, story:'搜出不少军械和木材，充实了库房。'},
+      {text:'留作前哨（威望+10，未来在此地建立据点）', effect:{prestige:10}, story:'你派兵驻扎此处，太原周边逐渐归附。'}
+    ]},
+    { id:'ty_spring', text:'太原城外有股清泉，传说饮之可强身健体。', opts:[
+      {text:'引水入寨（人口+5，粮食产出+5%）', effect:{population:5,food_buff:1}, story:'你命人开凿水渠，寨中用水无忧，百姓感恩戴德。'},
+      {text:'设为禁地，专人守护（威望+8）', effect:{prestige:8}, story:'此泉被称为"龙泉水"，四方来朝。'}
+    ]},
+  ],
+  /* 瓦岗山 */
+  wagang_mtn: [
+    { id:'wg_camp', text:'瓦岗山上散布着废弃营寨，翟让残部曾在此驻扎。', opts:[
+      {text:'收编残部（步兵+30，士气+5%）', effect:{infantry_add:30,morale_buff:1}, story:'数十名瓦岗老兵归队，军威大振！'},
+      {text:'搜寻遗物（金+200）', effect:{gold:200}, story:'营寨中遗留了不少金银，尽数入库。'}
+    ]},
+    { id:'wg_weapon', text:'瓦岗寨的后山有一座秘密兵器库未被发现！', opts:[
+      {text:'搬运武器（铁矿+100）', effect:{iron:100}, story:'库中刀枪林立，足以装备一整支军队。'},
+      {text:'封闭保护，以待后用（兵器库标记）', effect:{prestige:15}, story:'你命人封存此处，作为日后起兵之用。'}
+    ]},
+    { id:'wg_hermit', text:'瓦岗后山深处传来悠扬的琴声，似有高人隐居。', opts:[
+      {text:'循声拜访（威望+20，随机获赠技能书）', effect:{prestige:20,skill_book:1}, story:'这位自称"瓦岗旧友"的隐士，传你一卷《六韬》残篇。'},
+      {text:'不打扰清修（民忠+5）', effect:{loyalty:5}, story:'你命人不得打扰，周边百姓对此甚为赞许。'}
+    ]},
+  ],
+  /* 洛阳 */
+  luoyang: [
+    { id:'ly_palace', text:'洛阳宫中暗流涌动，王世充的部下各怀心思。', opts:[
+      {text:'暗中收买（金-300，获得洛阳情报）', effect:{gold:-300,intel:1}, story:'你与王世充麾下一名将官密谈，获知了洛阳城防弱点。'},
+      {text:'公开示好（威望+10，日后降服可获优待）', effect:{prestige:10}, story:'你派人送去厚礼，洛阳守将对你印象大为改观。'}
+    ]},
+    { id:'ly_market', text:'洛阳西市的商贾听闻你的威名，带来珍宝交易。', opts:[
+      {text:'高价购买（金-400，获得随机宝物）', effect:{gold:-400,treasure:1}, story:'西域来的琉璃盏，价值连城，摆在寨中倍增光彩。'},
+      {text:'以物易物（粮食-200，金+500）', effect:{food:-200,gold:500}, story:'洛阳缺粮，你的粮食换来了丰厚回报。'}
+    ]},
+  ],
+  /* 河北 */
+  hebei: [
+    { id:'hb_farm', text:'河北平原沃野千里，窦建德治下百姓富足。', opts:[
+      {text:'学习农耕之法（农田产出+15%持续20日）', effect:{farm_buff:1}, story:'你派遣农夫向河北老农学习精耕细作，受益匪浅。'},
+      {text:'招募农户（人口+10，粮食+200）', effect:{population:10,food:200}, story:'河北移民携带农具和粮种投奔，充实了寨中人口。'}
+    ]},
+    { id:'hb_volunteer', text:'窦建德旧部中有人仰慕你的义名，愿来投奔。', opts:[
+      {text:'欣然接纳（步兵+40）', effect:{infantry_add:40}, story:'这批窦家军旧部战力不俗，编入部队后士气高昂。'},
+      {text:'请其引荐河北豪杰（武将好感+5）', effect:{hero_favor:5}, story:'通过引荐，你的武将们结识了河北几位豪杰。'}
+    ]},
+  ],
+  /* 江都 */
+  jiangdu: [
+    { id:'jd_palace', text:'江都隋炀帝旧宫中，传闻还有未发掘的密室。', opts:[
+      {text:'深入探查（金+400，威望+15）', effect:{gold:400,prestige:15}, story:'在旧宫地下发现了一处密室，堆满了金银珠玉！'},
+      {text:'谨慎为上（威望+10，避免风险）', effect:{prestige:10}, story:'你命人封锁宫门。百姓传言你是稳重之主。'}
+    ]},
+    { id:'jd_ship', text:'江都运河码头泊着几艘战船，宇文化及已无暇顾及。', opts:[
+      {text:'夺取战船（水军+30，木材-50造船修葺）', effect:{navy_add:30,wood:-50}, story:'你派兵夺得三艘战船，水军力量大增！'},
+      {text:'拆取木材（木材+120）', effect:{wood:120}, story:'战船被拆解，上等木料充实了你的库房。'}
+    ]},
+  ],
+  /* 江淮 */
+  jianghuai: [
+    { id:'jh_water', text:'江淮水网密布，杜伏威在此经营多年，鱼米之乡。', opts:[
+      {text:'学习水田技术（粮食产出+10%）', effect:{food_buff:1}, story:'江淮农夫教你的农人开垦水田，粮食产量大增。'},
+      {text:'招募水手（水军+25）', effect:{navy_add:25}, story:'江淮子弟水性极佳，编入水军后如鱼得水。'}
+    ]},
+    { id:'jh_salt', text:'江淮沿海有私盐贩子，利润丰厚但风险不小。', opts:[
+      {text:'合作贩盐（金+600，民忠-3）', effect:{gold:600,loyalty:-3}, story:'私盐生意一本万利，但百姓略有怨言。'},
+      {text:'将其收编为正规军（威望+12，铁矿+30）', effect:{prestige:12,iron:30}, story:'你将私盐贩子编入后勤，秩序井然。'}
+    ]},
+  ],
+  /* 太原以北 */
+  shanxi_fw: [
+    { id:'sfw_horse', text:'太原以北的草原上，突厥部落时常在此放牧。', opts:[
+      {text:'高价买马（金-300，骑兵+30）', effect:{gold:-300,cavalry_add:30}, story:'突厥良马一匹难求，这三十匹足以组建精锐骑队。'},
+      {text:'偷猎野马（骑兵+15，有风险）', effect:{cavalry_add:15}, story:'你派人潜入草原，捕获了一批野马，虽不如突厥良驹，但也堪用。'}
+    ]},
+    { id:'sfw_fort', text:'此地有刘武周修筑的前哨堡垒，残破但尚可利用。', opts:[
+      {text:'修缮加固（木材-60，铁矿-40，防御+10%）', effect:{wood:-60,iron:-40,defense_buff:1}, story:'堡垒修缮一新，成为你北出的重要据点。'},
+      {text:'拆取石料（铁矿+80）', effect:{iron:80}, story:'堡垒的石料和铁件被拆下运回，充实了军械库。'}
+    ]},
+  ],
+  /* 长安 */
+  changan: [
+    { id:'ca_palace', text:'长安皇宫遗址虽已残破，但仍能看出昔日辉煌。', opts:[
+      {text:'搜寻国库遗迹（金+800）', effect:{gold:800}, story:'在废墟下发现了一处未遭洗劫的国库！金饼堆叠如山。'},
+      {text:'祭拜先帝（威望+30，民忠+10）', effect:{prestige:30,loyalty:10}, story:'你率众祭拜，长安百姓纷纷来归。'}
+    ]},
+    { id:'ca_library', text:'长安太学中尚有部分典籍未被焚毁。', opts:[
+      {text:'抢救典籍（随机科技+1级）', effect:{tech_up:1}, story:'太学博士感激涕零，将珍藏的兵书献上。'},
+      {text:'运回寨中藏书（威望+20）', effect:{prestige:20}, story:'这批典籍成为寨中最珍贵的文化财富。'}
+    ]},
+  ],
+
+  /* === 次要地点 === */
+  hanzhong: [
+    { id:'hz_mine', text:'汉中多山，矿藏丰富，但开采不易。', opts:[
+      {text:'组织开采（铁矿+200）', effect:{iron:200}, story:'汉中铁矿天下闻名，这批铁锭足以打造千件兵器。'},
+      {text:'招募矿工（人口+8，铁矿+80）', effect:{population:8,iron:80}, story:'矿工携家带口来投，充实了寨中人口。'}
+    ]},
+  ],
+  chengdu: [
+    { id:'cd_silk', text:'成都蜀锦天下闻名，有商人携精品前来贸易。', opts:[
+      {text:'大量购入（金-500，威望+20）', effect:{gold:-500,prestige:20}, story:'蜀锦轻如蝉翼，华美无比，你将其作为礼品馈赠四方。'},
+      {text:'以粮换锦（粮食-200，获得宝物）', effect:{food:-200,treasure:1}, story:'一匹金丝锦缎，足以让任何将领心生欢喜。'}
+    ]},
+    { id:'cd_dujiang', text:'都江堰水利工程令你惊叹，此术可用于寨中。', opts:[
+      {text:'学习水利（粮食产出+20%持续30日）', effect:{food_buff_long:1}, story:'你派工匠学习都江堰之法，寨中灌溉大为改善。'},
+      {text:'请工程师来寨（金-200，解锁新建筑方案）', effect:{gold:-200}, story:'一位经验丰富的水利工程师随你回寨。'}
+    ]},
+  ],
+  xiangyang: [
+    { id:'xy_general', text:'襄阳城中一位退役老将正在传授兵法。', opts:[
+      {text:'虚心求教（武将经验+200）', effect:{hero_exp:200}, story:'老将军倾囊相授，你的武将们受益匪浅，战术大开。'},
+      {text:'邀请出山（金-300，步兵经验+500）', effect:{gold:-300,inf_exp:500}, story:'老将军感动于你的诚意，答应助你训练新兵。'}
+    ]},
+  ],
+  yangzhou: [
+    { id:'yz_merchant', text:'扬州盐商富可敌国，一位大盐商发出宴请。', opts:[
+      {text:'赴宴结盟（金+500，建立商路）', effect:{gold:500,trade_route:1}, story:'盐商与你结为盟友，从此商路畅通，财富滚滚而来。'},
+      {text:'拒绝宴请（威望+10）', effect:{prestige:10}, story:'你以"不结交奸商"为由拒绝，百姓交口称赞。'}
+    ]},
+  ],
+  kaifeng: [
+    { id:'kf_granary', text:'开封粮仓众多，但管理混乱，有机可乘。', opts:[
+      {text:'收购余粮（粮食+400，金-150）', effect:{food:400,gold:-150}, story:'你以合理价格收购了大量存粮，充实了仓廪。'},
+      {text:'协助整顿（威望+15，民忠+5）', effect:{prestige:15,loyalty:5}, story:'你派官吏协助整顿粮仓，开封百姓铭感于心。'}
+    ]},
+  ],
+  saiwai: [
+    { id:'sw_tribe', text:'塞外草原上的突厥部落正在举行盛大那达慕。', opts:[
+      {text:'参加比试（威望+25）', effect:{prestige:25}, story:'你的勇士在摔跤比赛中连胜三场，突厥人刮目相看。'},
+      {text:'以礼相待建立友谊（获得战马+20）', effect:{cavalry_add:20}, story:'突厥首领赠你二十匹良马，以示友好。'}
+    ]},
+  ],
+  dongbei: [
+    { id:'db_hunting', text:'辽东苦寒之地，深山中有猛兽出没，但珍材也不少。', opts:[
+      {text:'组织冬猎（粮食+300，木材+100）', effect:{food:300,wood:100}, story:'猎获颇丰，野味堆积如山，皮毛可换重金。'},
+      {text:'招募辽东勇士（步兵+25，士气+5）', effect:{infantry_add:25,morale_buff:1}, story:'辽东壮士不畏严寒，作战勇猛，是一支劲旅。'}
+    ]},
+  ],
+  wuling: [
+    { id:'wl_hermit2', text:'五岭深山中，云雾缭绕处隐约有仙乐之声。', opts:[
+      {text:'寻访仙人（随机科技+2级）', effect:{tech_up:2}, story:'深山古洞中，一位鹤发童颜的老者传授了你失传的技艺！'},
+      {text:'采集珍稀药草（全体武将HP+5%）', effect:{hero_hp:1}, story:'山中珍稀药草被你尽数采集，制成丹药分赐武将。'}
+    ]},
+    { id:'wl_ruins', text:'五岭中发现了一座上古遗迹，碑文已模糊难辨。', opts:[
+      {text:'拓印碑文研究（威望+20）', effect:{prestige:20}, story:'碑文记载上古兵法，研究之后你的威望远播。'},
+      {text:'发掘遗迹（金+300，宝物+1）', effect:{gold:300,treasure:1}, story:'遗迹中出土了一件上古玉器，价值连城。'}
+    ]},
+  ],
+  silk_road: [
+    { id:'sr_caravan', text:'丝路起点的商队络绎不绝，异域珍宝琳琅满目。', opts:[
+      {text:'建立商站（金-400，此后每季+200金收入）', effect:{gold:-400,trade_post:1}, story:'商站建起后，丝绸之路的财富源源不断流入寨中。'},
+      {text:'大宗采购（金-300，获得宝物+2）', effect:{gold:-300,treasure:2}, story:'两件异域奇珍，足以让你的武将们爱不释手。'}
+    ]},
+  ],
+  hexi: [
+    { id:'hx_horse', text:'河西走廊的汗血宝马天下无双。', opts:[
+      {text:'重金求购（金-500，骑兵+50）', effect:{gold:-500,cavalry_add:50}, story:'五十匹汗血宝马引入军中，骑兵战力暴增。'},
+      {text:'以武会友（步兵+20，骑兵+20）', effect:{infantry_add:20,cavalry_add:20}, story:'通过比武贏得当地部族尊重，获赠精良战马。'}
+    ]},
+  ],
+  qingzhou: [
+    { id:'qz_salt', text:'青州盐场规模宏大，若能为己所用……', opts:[
+      {text:'合作开发（金+300/季持续4季）', effect:{salt_income:4}, story:'青州盐场与你达成协议，每季分你三成收益。'},
+      {text:'直接收购盐场（金-600，永久收入+150/季）', effect:{gold:-600,salt_perm:1}, story:'你出资买下了一座盐场，从此有了稳定的盐利收入。'}
+    ]},
+  ],
+  jingzhou: [
+    { id:'jz_navy', text:'荆州水师名扬天下，有退役水军将领在此隐居。', opts:[
+      {text:'邀请训练水军（水军+40）', effect:{navy_add:40}, story:'退役将领亲训水军，你的船队从此横行江上。'},
+      {text:'请教水战之法（水军战力+15%）', effect:{navy_buff:1}, story:'学习了荆州水师的独门战法，江河之上无人能敌。'}
+    ]},
+  ],
+  yuzhou: [
+    { id:'yz_blacksmith', text:'豫州铁匠铺众多，能工巧匠云集。', opts:[
+      {text:'招募铁匠（铁矿产出+20%）', effect:{iron_buff:1}, story:'十名豫州铁匠来投，打铁效率大增。'},
+      {text:'定做兵器（铁矿-50，步兵战力+10%）', effect:{iron:-50,inf_buff:1}, story:'一批精良兵器打造完成，步兵装备大幅升级。'}
+    ]},
+  ],
+  liangzhou: [
+    { id:'lz_qiang', text:'凉州羌胡部落善骑射，若能结交，必有大用。', opts:[
+      {text:'结盟羌人（骑兵+30，获得羌族同盟）', effect:{cavalry_add:30,ally_qiang:1}, story:'羌族首领与你歃血为盟，从此凉州为你后盾。'},
+      {text:'学习骑射（骑兵战力+10%）', effect:{cav_buff:1}, story:'羌人骑射之术天下无双，你的骑兵受益匪浅。'}
+    ]},
+  ],
+  bingzhou: [
+    { id:'bz_bandit', text:'并州太行山中匪患严重，百姓苦不堪言。', opts:[
+      {text:'剿匪安民（威望+20，民忠+10）', effect:{prestige:20,loyalty:10}, story:'你亲率精兵入山剿匪，太行百姓箪食壶浆来迎。'},
+      {text:'招安土匪（步兵+35，但民忠-5）', effect:{infantry_add:35,loyalty:-5}, story:'土匪被招安编入军中，但百姓对你的做法略有微词。'}
+    ]},
+  ],
+  xu_zhou: [
+    { id:'xz_refugee', text:'徐州四战之地，流民众多，正是招兵买马的好时机。', opts:[
+      {text:'大量募兵（步兵+50，粮食-200）', effect:{infantry_add:50,food:-200}, story:'徐州流民踊跃应征，你的军队迅速壮大。'},
+      {text:'收留妇孺（人口+15，粮食-100）', effect:{population:15,food:-100}, story:'妇孺老幼得到安置，寨中人口大增，生机勃勃。'}
+    ]},
+  ],
+  jianan: [
+    { id:'ja_ship', text:'建安是闽中造船重镇，工匠技艺精湛。', opts:[
+      {text:'订购战船（金-300，水军+35）', effect:{gold:-300,navy_add:35}, story:'建安工匠为你打造了五艘坚固战船。'},
+      {text:'学习造船术（木材消耗-10%）', effect:{wood_save:1}, story:'学会了闽中造船术，此后造舰用料大为节省。'}
+    ]},
+  ],
+  jiangxia: [
+    { id:'jx_water', text:'江夏是长江水战要地，有老船工知晓最险的暗流。', opts:[
+      {text:'请教航道（水军战力+10%，航速+10%）', effect:{navy_buff:1,speed_buff:1}, story:'老船工将毕生所知的航道图赠与你，水上行军如履平地。'},
+      {text:'招募镖师（水军+30）', effect:{navy_add:30}, story:'江夏镖师水性一流，加入水军后如虎添翼。'}
+    ]},
+  ],
+
+  /* === 特殊地点（深度探索） === */
+  zhongnan_mtn: [
+    { id:'zn_hermit', text:'终南山上云雾缭绕，传说有得道高人隐居于此。你沿小径攀行，来到一处茅屋前。', chain:'zhongnan', step:1, opts:[
+      {text:'叩门求见（进入下一阶段）', effect:{}, story:'门缓缓打开，一位白发老翁端坐蒲团，微笑道："有缘人，请进。"', nextEvent:'zn_test'},
+      {text:'在门外等候三日（威望+10）', effect:{prestige:10}, story:'老翁第三日方才开门，赞你有诚意，但缘分未到。'}
+    ]},
+    { id:'zn_test', text:'老翁道："我有一题：何为天下大道？"', chain:'zhongnan', step:2, opts:[
+      {text:'答：以民为本（民忠+15，获得《道德经》残卷）', effect:{loyalty:15,treasure:1}, story:'老翁颔首："善。此乃《道德经》真传一卷，赠于有缘人。"'},
+      {text:'答：以武定国（武将全体攻击+3）', effect:{hero_atk:3}, story:'老翁笑道："倒也实在。我传你一套吐纳之法，可强身健体。"'}
+    ]},
+  ],
+  shaolin: [
+    { id:'sl_monk', text:'少林寺钟声悠扬，棍僧列阵，气势庄严。方丈亲自出迎。', chain:'shaolin', step:1, opts:[
+      {text:'请教武学（全体武将防御+5）', effect:{hero_def:5}, story:'少林棍僧传授你一套护身功法，你的武将们勤加练习，防御大增。'},
+      {text:'请棍僧下山相助（步兵+40）', effect:{infantry_add:40}, story:'方丈派遣四十名棍僧随你下山，战力非同小可。'}
+    ]},
+    { id:'sl_scripture', text:'藏经阁中保存着许多兵书战策，方丈特许你翻阅。', chain:'shaolin', step:2, opts:[
+      {text:'研读兵书（随机科技+2）', effect:{tech_up:2}, story:'一本《少林武经》令你茅塞顿开，两项技术同时突破！'},
+      {text:'抄录带回（威望+25）', effect:{prestige:25}, story:'你抄录了数卷珍本带回，天下文人纷纷来借阅。'}
+    ]},
+  ],
+  penglai: [
+    { id:'pl_island', text:'蓬莱仙岛隐藏在茫茫大海中，你费尽周折才找到此岛。岛上花木扶疏，恍若仙境。', chain:'penglai', step:1, opts:[
+      {text:'搜寻仙药（全体武将HP上限+15%）', effect:{hero_hp:2}, story:'在岛上的玉泉边，你发现了一种奇异的灵芝，制成丹药后武将们体力大增。'},
+      {text:'寻找仙人（威望+30，解开蓬莱之谜）', effect:{prestige:30}, story:'仙人赐你一面宝镜："可照千里之外，用在军事上大有裨益。"'}
+    ]},
+    { id:'pl_treasure', text:'蓬莱岛上有座古仙人的洞府，石门紧闭。', chain:'penglai', step:2, opts:[
+      {text:'叩门三下（随机获得2件宝物）', effect:{treasure:2}, story:'石门轰然洞开，洞中珍宝琳琅，你取走两件最珍贵的。'},
+      {text:'临摹壁刻（科技经验+200）', effect:{tech_exp:200}, story:'洞壁刻满上古符文，你命人拓印带回，研究中大有收获。'}
+    ]},
+  ],
+  under_market: [
+    { id:'um_entry', text:'地下黑市的入口隐藏在一间破败的酒肆之下。暗门之后，别有洞天——灯火通明，人流如织。', chain:'under_market', step:1, opts:[
+      {text:'购买情报（金-300，获得随机势力情报）', effect:{gold:-300,intel:2}, story:'黑市情报贩子为你提供了极为详尽的敌军部署图。'},
+      {text:'招募刺客（获得特殊战术道具×2）', effect:{tactic_item:2}, story:'两名身手不凡的刺客愿为你效力，关键时刻可出奇制胜。'}
+    ]},
+    { id:'um_auction', text:'黑市拍卖会开始了，这次拍品中有一件稀世珍宝。', chain:'under_market', step:2, opts:[
+      {text:'出价竞拍（金-600，获得传奇宝物）', effect:{gold:-600,legend_treasure:1}, story:'你以重金拍下了一件传国玉器，价值连城。'},
+      {text:'旁观学习（金+200）', effect:{gold:200}, story:'拍卖会结束后，你以低价收购了一些流拍品，小赚一笔。'}
+    ]},
+  ],
+  sui_tomb: [
+    { id:'st_entrance', text:'隋帝陵巍峨壮观，但入口处机关重重，稍有不慎便有生命危险。', chain:'sui_tomb', step:1, opts:[
+      {text:'小心破解机关（铁矿+100，金+300）', effect:{iron:100,gold:300}, story:'你步步为营破解了外围机关，在墓道中发现了大量陪葬铁器。'},
+      {text:'强行突破（损失步兵-15，但进入深处）', effect:{infantry_loss:15}, story:'虽然付出惨痛代价，但你成功进入了陵墓深处。'}
+    ]},
+    { id:'st_chamber', text:'陵墓最深处，隋炀帝的棺椁之前，摆放着三件镇墓之宝。但取走必触怒亡灵…', chain:'sui_tomb', step:2, opts:[
+      {text:'只取一件离开（获得传奇宝物×1）', effect:{legend_treasure:1}, story:'你取走最珍贵的一件——据说此物曾是文帝传下的镇国之宝。'},
+      {text:'三件全取，速离陵墓（获得3件宝物，但威望-20）', effect:{treasure:3,prestige:-20}, story:'你卷走三件宝物仓皇逃出。虽然获利颇丰，但盗墓之名传遍天下…'}
+    ]},
+  ],
+}
+
+// 探索事件辅助：根据事件ID执行效果
+function applyExploreEffect(effect, storyCb) {
+  if (!effect) return
+  const e = effect
+  if (e.gold) gs.gold = Math.max(0, gs.gold + e.gold)
+  if (e.food) gs.food = Math.max(0, gs.food + e.food)
+  if (e.wood) gs.wood = Math.max(0, gs.wood + e.wood)
+  if (e.iron) gs.iron = Math.max(0, gs.iron + e.iron)
+  if (e.prestige) gs.prestige = Math.max(0, gs.prestige + e.prestige)
+  if (e.loyalty) gs.loyalty = Math.min(100, Math.max(0, gs.loyalty + e.loyalty))
+  if (e.population) gs.population = Math.max(0, gs.population + e.population)
+  if (e.infantry_add) gs.troops.infantry = Math.max(0, (gs.troops.infantry||0) + e.infantry_add)
+  if (e.cavalry_add) gs.troops.cavalry = Math.max(0, (gs.troops.cavalry||0) + e.cavalry_add)
+  if (e.navy_add) { gs.troops.navy = Math.max(0, (gs.troops.navy||0) + e.navy_add) }
+  if (e.infantry_loss) gs.troops.infantry = Math.max(0, (gs.troops.infantry||0) - e.infantry_loss)
+  if (e.hero_exp && gs.heroes.length > 0) gs.heroes.forEach(h=>{ h.exp = (h.exp||0) + Math.floor(e.hero_exp/gs.heroes.length) })
+  if (e.hero_favor && gs.heroes.length > 0) gs.heroes.forEach(h=>{ h.favor = Math.min(100, (h.favor||0) + e.hero_favor) })
+  if (e.hero_atk && gs.heroes.length > 0) gs.heroes.forEach(h=>{ h.atk = (h.atk||0) + e.hero_atk })
+  if (e.hero_def && gs.heroes.length > 0) gs.heroes.forEach(h=>{ h.def = (h.def||0) + e.hero_def })
+  if (e.hero_hp && gs.heroes.length > 0) gs.heroes.forEach(h=>{ h.hp = Math.floor((h.hp||100) * (1 + e.hero_hp * 0.05)) })
+  if (e.skill_book) { if (!gs.skillBooks) gs.skillBooks = 0; gs.skillBooks += e.skill_book }
+  if (e.treasure) { if (!gs.treasures) gs.treasures = 0; gs.treasures += e.treasure }
+  if (e.legend_treasure) { if (!gs.legendTreasures) gs.legendTreasures = 0; gs.legendTreasures += e.legend_treasure }
+  if (e.tech_up) {
+    const eligible = TECH_DEFS.filter(t=>(gs.tech[t.id]||0)<t.maxLvl)
+    for (let i = 0; i < (e.tech_up||1) && eligible.length > 0; i++) {
+      const t = eligible[Math.floor(Math.random()*eligible.length)]
+      gs.tech[t.id] = (gs.tech[t.id]||0) + 1
+      if (storyCb) storyCb(`${t.name} → Lv.${gs.tech[t.id]}`)
+      const idx = eligible.indexOf(t); if (idx>-1) eligible.splice(idx,1)
+    }
+  }
+  if (e.tactic_item) { if (!gs.tactics) gs.tactics = []; for (let i=0;i<e.tactic_item;i++) gs.tactics.push('smoke_bomb') }
+  // 标记特殊效果
+  if (e.farm_buff) gs.farmBuffDays = (gs.farmBuffDays||0) + (e.farm_buff === 1 ? 20 : 30)
+  if (e.defense_buff) gs.defenseBuffDays = (gs.defenseBuffDays||0) + 10
+  if (e.morale_buff) gs.moraleBuffDays = (gs.moraleBuffDays||0) + 5
+  if (e.food_buff) gs.foodBuffDays = (gs.foodBuffDays||0) + 20
+  if (e.iron_buff) gs.ironBuffDays = (gs.ironBuffDays||0) + 20
+  if (e.navy_buff) gs.navyBuffDays = (gs.navyBuffDays||0) + 30
+  if (e.cav_buff) gs.cavBuffDays = (gs.cavBuffDays||0) + 30
+  if (e.inf_buff) gs.infBuffDays = (gs.infBuffDays||0) + 30
+  if (e.wood_save) gs.woodSaveBonus = (gs.woodSaveBonus||0) + 0.1
+  if (e.intel) gs.intelLevel = (gs.intelLevel||0) + e.intel
+  if (e.ally_qiang) gs.qiangAlly = true
+  if (e.trade_route) { if (!gs.tradeRoutes) gs.tradeRoutes = 0; gs.tradeRoutes += 1 }
+  if (e.trade_post) { if (!gs.tradePosts) gs.tradePosts = 0; gs.tradePosts += 1 }
+  if (e.salt_income) gs.saltIncomeDays = (gs.saltIncomeDays||0) + e.salt_income * 30
+  if (e.salt_perm) gs.permanentSaltIncome = (gs.permanentSaltIncome||0) + 150
+  if (e.tech_exp) gs.totalTechExp = (gs.totalTechExp||0) + e.tech_exp
+}
 
 const TECH_DEFS = [
   { id:'infantry_tech', name:'步兵训练', icon:'🛡', desc:'提升步兵战斗能力', maxLvl:5, baseCost:{gold:200,prestige:0}, costMult:2.5,
@@ -2752,9 +3072,9 @@ const app = createApp({
       gs.location = loc.name
       if (!gs.exploredLocations.includes(locId)) gs.exploredLocations.push(locId)
       addStory(`前往【${loc.name}】，消耗行动点${loc.distance}。`, 'system')
-      if (loc.events && Math.random() < 0.6) {
-        const ev = loc.events[Math.floor(Math.random()*loc.events.length)]
-        addStory(`在${loc.name}发现：${ev}`, 'event')
+      // 途中随机事件
+      if (Math.random() < 0.35) {
+        triggerTravelEvent()
       }
       if (loc.factionId && !gs.defeatedFactions.includes(loc.factionId)) {
         addStory(`⚠ 此地由【${FACTIONS.find(f=>f.id===loc.factionId)?.name||'未知势力'}】控制，小心行事！`, 'warning')
@@ -2762,29 +3082,94 @@ const app = createApp({
       checkAchievements()
     }
 
+    // 旅行途中随机遭遇
+    function triggerTravelEvent() {
+      const events = [
+        { text:'途中遇到一队商旅，送你一些盘缠。', effect:{gold:80}, story:'商旅感激你维护一方平安。' },
+        { text:'路遇山贼，你击退后搜出一些财物。', effect:{gold:50,prestige:5}, story:'山贼闻风而逃，留下了抢来的财物。' },
+        { text:'途中发现一处野果林，采摘了不少。', effect:{food:60}, story:'野果甘甜，充作军粮再合适不过。' },
+        { text:'路上遇到逃亡的难民，送来一份情报。', effect:{intel:1}, story:'难民告知了前方势力的一些动向。' },
+        { text:'一匹野马拦路，竟不惧人！', effect:{cavalry_add:5}, story:'你亲自驯服了这匹烈马，带回寨中。' },
+      ]
+      const ev = events[Math.floor(Math.random()*events.length)]
+      addStory(ev.text, 'event')
+      applyExploreEffect(ev.effect)
+    }
+
     function exploreLoc(locId) {
       const loc = MAP_LOCATIONS.find(l=>l.id===locId)
       if (!loc) return
       if (!gs.exploredLocations.includes(locId)) gs.exploredLocations.push(locId)
+      
+      // 初始化探索追踪
+      if (!gs.locationExplores) gs.locationExplores = {}
+      if (!gs.locationExplores[locId]) gs.locationExplores[locId] = { count:0, doneEvents:[] }
+      const locExp = gs.locationExplores[locId]
+      locExp.count++
+      gs.totalExploreCount = (gs.totalExploreCount||0) + 1
+      
       addStory(`探索了【${loc.name}】！`, 'reward')
       gs.prestige += 5
-      if (Math.random() < 0.4) {
-        gs.gold += 100
-        gs.totalExploreCount = (gs.totalExploreCount||0) + 1
-        addStory('发现了隐藏的财宝！金+100', 'reward')
-      }
-      // 五岭成就
-      if (locId === 'wuling') {
-        addStory('在深山中遇见隐世高人，传授一门绝学！', 'event')
-        // 随机升级一项科技
-        const eligible = TECH_DEFS.filter(t=>(gs.tech[t.id]||0)<t.maxLvl)
-        if (eligible.length > 0) {
-          const t = eligible[Math.floor(Math.random()*eligible.length)]
-          gs.tech[t.id] = (gs.tech[t.id]||0) + 1
-          addStory(`${t.name}获得提升！（Lv.${gs.tech[t.id]}）`, 'reward')
+      
+      // 使用EXPLORE_EVENTS数据
+      const locEvents = EXPLORE_EVENTS[locId]
+      if (locEvents && locEvents.length > 0) {
+        // 优先选择未经历的事件
+        const fresh = locEvents.filter(ev => !locExp.doneEvents.includes(ev.id))
+        if (fresh.length > 0) {
+          const ev = fresh[Math.floor(Math.random()*fresh.length)]
+          locExp.doneEvents.push(ev.id)
+          triggerExploreEvent(ev, locId)
+        } else {
+          // 所有事件都经历过了，给通用奖励
+          addStory('对此地的探索已达极限，但仍有些小收获。', 'system')
+          gs.gold += 50 + Math.floor(Math.random()*100)
+        }
+      } else {
+        // 无特殊事件的地点，给随机奖励
+        if (Math.random() < 0.5) {
+          gs.gold += 80 + Math.floor(Math.random()*120)
+          addStory('发现了隐藏的财宝！', 'reward')
+        } else if (Math.random() < 0.4) {
+          gs.food += 50 + Math.floor(Math.random()*100)
+          addStory('发现了丰富的野果和猎物！', 'reward')
         }
       }
       checkAchievements()
+    }
+
+    // 触发探索事件（含连锁事件处理）
+    function triggerExploreEvent(ev, locId) {
+      addStory('---')
+      addStory(ev.text, 'event')
+      
+      if (ev.opts) {
+        setOpts(ev.opts.map(opt => ({
+          text: opt.text,
+          style: 'primary',
+          action: () => {
+            if (opt.effect) {
+              // 先显示效果描述
+              applyExploreEffect(opt.effect, (msg) => addStory(msg, 'reward'))
+            }
+            if (opt.story) addStory(opt.story, 'reward')
+            
+            // 处理连锁事件
+            if (opt.nextEvent && EXPLORE_EVENTS[locId]) {
+              const nextEv = EXPLORE_EVENTS[locId].find(e => e.id === opt.nextEvent)
+              if (nextEv) {
+                const locExp = gs.locationExplores[locId]
+                if (locExp && !locExp.doneEvents.includes(nextEv.id)) {
+                  locExp.doneEvents.push(nextEv.id)
+                  setTimeout(() => triggerExploreEvent(nextEv, locId), 500)
+                  return
+                }
+              }
+            }
+            checkAchievements()
+          }
+        })))
+      }
     }
 
     function renderMap() {
@@ -3454,6 +3839,26 @@ const app = createApp({
         ngPlus:gs.ngPlus||0,
         tutorialStep:gs.tutorialStep||0,
         hiddenUnlocks:gs.hiddenUnlocks||[],
+        locationExplores:gs.locationExplores||{},
+        permanentSaltIncome:gs.permanentSaltIncome||0,
+        saltIncomeDays:gs.saltIncomeDays||0,
+        tradeRoutes:gs.tradeRoutes||0,
+        tradePosts:gs.tradePosts||0,
+        intelLevel:gs.intelLevel||0,
+        qiangAlly:gs.qiangAlly||false,
+        skillBooks:gs.skillBooks||0,
+        treasures:gs.treasures||0,
+        legendTreasures:gs.legendTreasures||0,
+        farmBuffDays:gs.farmBuffDays||0,
+        defenseBuffDays:gs.defenseBuffDays||0,
+        moraleBuffDays:gs.moraleBuffDays||0,
+        foodBuffDays:gs.foodBuffDays||0,
+        ironBuffDays:gs.ironBuffDays||0,
+        navyBuffDays:gs.navyBuffDays||0,
+        cavBuffDays:gs.cavBuffDays||0,
+        infBuffDays:gs.infBuffDays||0,
+        woodSaveBonus:gs.woodSaveBonus||0,
+        totalTechExp:gs.totalTechExp||0,
       }
       localStorage.setItem('stjyc_v1', JSON.stringify(data))
       addStory('💾 游戏已保存！', 'system')
@@ -3524,6 +3929,26 @@ const app = createApp({
           ngPlus:d.ngPlus||0,
           tutorialStep:d.tutorialStep||0,
           hiddenUnlocks:d.hiddenUnlocks||[],
+          locationExplores:d.locationExplores||{},
+          permanentSaltIncome:d.permanentSaltIncome||0,
+          saltIncomeDays:d.saltIncomeDays||0,
+          tradeRoutes:d.tradeRoutes||0,
+          tradePosts:d.tradePosts||0,
+          intelLevel:d.intelLevel||0,
+          qiangAlly:d.qiangAlly||false,
+          skillBooks:d.skillBooks||0,
+          treasures:d.treasures||0,
+          legendTreasures:d.legendTreasures||0,
+          farmBuffDays:d.farmBuffDays||0,
+          defenseBuffDays:d.defenseBuffDays||0,
+          moraleBuffDays:d.moraleBuffDays||0,
+          foodBuffDays:d.foodBuffDays||0,
+          ironBuffDays:d.ironBuffDays||0,
+          navyBuffDays:d.navyBuffDays||0,
+          cavBuffDays:d.cavBuffDays||0,
+          infBuffDays:d.infBuffDays||0,
+          woodSaveBonus:d.woodSaveBonus||0,
+          totalTechExp:d.totalTechExp||0,
         })
         gs.started = true
         addStory('📂 读档成功！聚义事业继续…', 'reward')
@@ -4261,16 +4686,25 @@ const app = createApp({
       if (allFactions) { score += 2000; bd.push('统一天下: +2000') }
       const achScore = gs.achievements.length * 50
       score += achScore; bd.push(`成就 ${gs.achievements.length}个: +${achScore}`)
+      // 探索分 (v1.7新增)
+      const exploreCount = gs.totalExploreCount || 0
+      if (exploreCount > 0) { const es = Math.min(exploreCount, 50) * 10; score += es; bd.push(`探索次数 ${exploreCount}: +${es}`) }
+      const locationsVisited = Object.keys(gs.locationExplores||{}).length
+      if (locationsVisited > 0) { const ls = locationsVisited * 15; score += ls; bd.push(`到达地点 ${locationsVisited}处: +${ls}`) }
+      const tradeRoutes = (gs.tradeRoutes||0) + (gs.tradePosts||0)
+      if (tradeRoutes > 0) { score += tradeRoutes * 100; bd.push(`商路/商站 ${tradeRoutes}条: +${tradeRoutes*100}`) }
+      if (gs.qiangAlly) { score += 300; bd.push('羌族同盟: +300') }
+      if ((gs.intelLevel||0) >= 2) { score += 200; bd.push('情报等级≥2: +200') }
       // 难度加成
       const diffMult = gs.difficulty==='hell'?1.5:(gs.difficulty==='hard'?1.2:1.0)
       score = Math.floor(score * diffMult)
       bd.push(`难度系数 ×${diffMult}`)
       // 等级
       let grade = 'B'
-      if (score >= 8000) grade = 'SSS'
-      else if (score >= 6000) grade = 'SS'
-      else if (score >= 4000) grade = 'S'
-      else if (score >= 2500) grade = 'A'
+      if (score >= 10000) grade = 'SSS'
+      else if (score >= 7500) grade = 'SS'
+      else if (score >= 5000) grade = 'S'
+      else if (score >= 3000) grade = 'A'
       bd.push(`最终评定: ${grade}`)
       // 隐藏解锁
       if (!gs.hiddenUnlocks) gs.hiddenUnlocks = []
