@@ -52,7 +52,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
 /* ===== 故事面板 ===== */
 .story-panel{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--panel-bg);}
 .story-panel .sh{padding:6px 12px;border-bottom:1px solid var(--border);color:var(--gold);font-size:12px;letter-spacing:2px;flex-shrink:0;}
-.story-body{flex:1;overflow-y:auto;padding:8px 12px;scrollbar-width:thin;scrollbar-color:var(--border) var(--bg);-webkit-overflow-scrolling:touch;}
+.story-body{flex:1;overflow-y:auto;padding:8px 12px;scrollbar-width:thin;scrollbar-color:var(--border) var(--bg);-webkit-overflow-scrolling:touch;contain:strict;will-change:scroll-position;transform:translateZ(0);}
 .story-body::-webkit-scrollbar{width:3px;}
 .story-body::-webkit-scrollbar-track{background:var(--bg);}
 .story-body::-webkit-scrollbar-thumb{background:var(--border);}
@@ -86,7 +86,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
 .nav-tab{padding:7px 12px;border-right:1px solid var(--border);cursor:pointer;color:var(--text-dim);font-size:12px;white-space:nowrap;transition:all .15s;touch-action:manipulation;}
 .nav-tab:hover,.nav-tab:active{color:var(--text);}
 .nav-tab.active{color:var(--gold);background:var(--bg);border-bottom:2px solid var(--gold);}
-.panel-content{flex:1;overflow-y:auto;padding:8px 12px;-webkit-overflow-scrolling:touch;}
+.panel-content{flex:1;overflow-y:auto;padding:8px 12px;-webkit-overflow-scrolling:touch;contain:layout style;transform:translateZ(0);}
 
 /* ===== 卡片 ===== */
 .card{background:var(--panel-bg);border:1px solid var(--border);padding:8px 10px;margin-bottom:6px;}
@@ -127,6 +127,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
 .combat-side .cs-name{color:var(--gold);font-size:12px;margin-bottom:3px;}
 .combat-side .cs-hp{font-size:11px;color:var(--text-dim);margin-bottom:2px;}
 .combat-vs{display:flex;align-items:center;color:var(--gold);font-size:18px;padding:0 4px;}
+
+/* ===== 战斗动画 ===== */
+@keyframes hitFlash{0%{filter:brightness(2);transform:scale(1.05)}100%{filter:brightness(1);transform:scale(1)}}
+@keyframes critBurst{0%{filter:brightness(3) saturate(2);transform:scale(1.1)}50%{filter:brightness(1.5) saturate(1.5)}100%{filter:brightness(1);transform:scale(1)}}
+@keyframes floatUp{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-24px)}}
+@keyframes moraleGlow{0%{box-shadow:0 0 4px var(--gold)}50%{box-shadow:0 0 12px var(--gold)}100%{box-shadow:0 0 4px var(--gold)}}
+@keyframes victoryPulse{0%,100%{box-shadow:0 0 10px var(--gold)}50%{box-shadow:0 0 30px var(--gold),0 0 60px var(--gold-dim)}}
+.combat-side.hit{animation:hitFlash .3s ease-out;}
+.combat-side.crit{animation:critBurst .5s ease-out;}
+.combat-side.victory{animation:victoryPulse .6s ease-in-out;}
+.combat-float{position:absolute;font-size:14px;font-weight:bold;pointer-events:none;z-index:50;animation:floatUp .8s ease-out forwards;}
+.combat-float.dmg{color:var(--red-bright);}
+.combat-float.crit{color:#ff6600;font-size:18px;}
+.combat-float.heal{color:var(--green-bright);}
+.combat-float.morale{color:var(--gold);font-size:12px;}
+.combat-log-line{padding:2px 0;font-size:12px;animation:fadeInSlide .3s ease-out;}
+@keyframes fadeInSlide{0%{opacity:0;transform:translateX(-8px)}100%{opacity:1;transform:translateX(0)}}
+.combat-side.morale-up{animation:moraleGlow .5s ease-in-out;}
+
+/* 战斗HUD浮层 */
+.combat-hud-overlay{display:flex;gap:6px;padding:6px 8px;border-bottom:2px solid var(--red);background:linear-gradient(90deg,#1a0a0a,#1a1008,#1a0a0a);margin-bottom:4px;position:relative;flex-shrink:0;}
 
 /* ===== 大地图 ===== */
 .map-grid{font-family:monospace;font-size:clamp(10px,2.5vw,13px);line-height:1.8;padding:6px;background:var(--bg);border:1px solid var(--border);margin-bottom:8px;color:var(--text-dim);white-space:pre;overflow-x:auto;-webkit-overflow-scrolling:touch;}
@@ -387,7 +408,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
     <button class="btn" @click="startGame('hell')">地狱模式</button>
     <button v-if="hasSave" class="btn" style="margin-top:16px;border-color:var(--gold-dim);" @click="loadGame">继续游戏</button>
     <button v-if="hasNgPlusSave()" class="btn" style="margin-top:16px;border-color:var(--accent);" @click="loadNgPlus">🌟 新游戏+</button>
-    <div class="version">v1.7 | 隋唐聚义村 · 大地图70+探索事件/特殊地点深度剧情/商路贸易</div>
+    <div class="version">v1.8 | 隋唐聚义村 · 性能优化/BLD查找表/战斗动画/多周目增强/响应式UI</div>
   </div>
 
   <!-- 游戏界面 -->
@@ -410,6 +431,23 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
       <!-- 故事面板 -->
       <div class="story-panel">
         <div class="sh">聚义纪事 <span style="font-size:10px;color:var(--text-dim)">{{WEATHERS[gs.weather].icon}} {{SEASON_EFFECTS[gs.season]?.desc||''}}</span></div>
+        <!-- 战斗HUD浮层 -->
+        <div v-if="combat.active" class="combat-hud-overlay">
+          <div :class="['combat-side', combat.allyHitAnim?'hit':'', combat.allyCritAnim?'crit':'', combat.allyVictory?'victory':'']">
+            <div class="cs-name">⚔ 我军 {{combat.allyMorale>=80?'💪':combat.allyMorale<40?'😰':''}}</div>
+            <div class="cs-hp">兵力：{{Math.floor(combat.allyHp/10)}} | HP：{{combat.allyHp}}/{{combat.allyMaxHp}}</div>
+            <div class="progress-bar"><div class="progress-fill fill-blue" :style="{width:(combat.allyHp/combat.allyMaxHp*100)+'%'}"></div></div>
+            <div style="font-size:11px;margin-top:2px;">士气：<span :style="{color:combat.allyMorale>=60?'var(--green-bright)':'var(--red-bright)'}">{{combat.allyMorale}}</span></div>
+          </div>
+          <div class="combat-vs">⚡</div>
+          <div :class="['combat-side', combat.enemyHitAnim?'hit':'', combat.enemyCritAnim?'crit':'', combat.enemyDefeat?'victory':'']">
+            <div class="cs-name">{{FACTIONS.find(f=>f.id===combat.factionId)?.name||'敌军'}} {{combat.enemyMorale>=80?'🔥':''}}</div>
+            <div class="cs-hp">HP：{{combat.enemyHp}}/{{combat.enemyMaxHp}}</div>
+            <div class="progress-bar"><div class="progress-fill fill-red" :style="{width:(combat.enemyHp/combat.enemyMaxHp*100)+'%'}"></div></div>
+            <div style="font-size:11px;margin-top:2px;">士气：<span :style="{color:combat.enemyMorale>=60?'var(--green-bright)':'var(--red-bright)'}">{{combat.enemyMorale}}</span></div>
+          </div>
+          <div v-if="combat.floatDmg" :class="'combat-float '+combat.floatDmg.type" :style="{left:combat.floatDmg.side==='ally'?'20%':'60%',top:'30%'}">{{combat.floatDmg.text}}</div>
+        </div>
         <div class="story-body" ref="storyBody">
           <div v-for="(l,i) in gs.story" :key="i" :class="'sline '+l.type">{{l.text}}</div>
         </div>
@@ -772,15 +810,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-main);font-si
             <div class="section-title">🏆 成就系统 <span style="font-size:13px;color:var(--text-dim)">{{gs.achievements.length}}/40</span></div>
             <div v-for="cat in ACHIEVE_CATS" :key="cat.id">
               <div style="color:var(--gold-dim);font-size:13px;margin:10px 0 5px;padding-bottom:3px;border-bottom:1px solid var(--border);">{{cat.icon}} {{cat.name}}</div>
-              <div v-for="ach in ACHIEVEMENTS.filter(a=>a.cat===cat.id)" :key="ach.id" :class="['card', gs.achievements.includes(ach.id)?'achieve-done':'locked']">
+              <div v-for="ach in ACHIEVEMENTS.filter(a=>a.cat===cat.id)" :key="ach.id" :class="['card', gs._achSet?.has(ach.id)?'achieve-done':'locked']">
                 <div class="cname">
-                  <span v-if="gs.achievements.includes(ach.id)" style="color:var(--gold);">✦ </span>
+                  <span v-if="gs._achSet?.has(ach.id)" style="color:var(--gold);">✦ </span>
                   <span v-else style="color:var(--text-dim);">○ </span>
                   {{ach.name}}
-                  <span v-if="ach.hidden&&!gs.achievements.includes(ach.id)" style="color:var(--text-dim);font-size:11px;"> [隐藏]</span>
+                  <span v-if="ach.hidden&&!gs._achSet?.has(ach.id)" style="color:var(--text-dim);font-size:11px;"> [隐藏]</span>
                 </div>
-                <div class="cdesc">{{gs.achievements.includes(ach.id)||!ach.hidden ? ach.desc : '???'}}</div>
-                <div v-if="gs.achievements.includes(ach.id)" style="font-size:11px;color:var(--gold-dim);margin-top:2px;">奖励：{{ach.reward}}</div>
+                <div class="cdesc">{{gs._achSet?.has(ach.id)||!ach.hidden ? ach.desc : '???'}}</div>
+                <div v-if="gs._achSet?.has(ach.id)" style="font-size:11px;color:var(--gold-dim);margin-top:2px;">奖励：{{ach.reward}}</div>
               </div>
             </div>
           </div>
@@ -1188,6 +1226,15 @@ function getBldAdjacencyBonus() {
 function getActiveAdjacencyNames() {
   const activeBlds = gs.buildings.map(b=>b.id)
   return BLD_ADJACENCY.filter(adj=>adj.ids.every(id=>activeBlds.includes(id))).map(a=>a.name)
+}
+
+// 性能优化：BLD_DEFS快速查找表 & 天气概率预缓存
+const BLD_LOOKUP = Object.fromEntries(BLD_DEFS.map(d=>[d.id, d]))
+const WEATHER_PROPS = {
+  1:[0.3,0.2,0.3,0.1,0.1,0,0],    // 春
+  2:[0.4,0.1,0.2,0.1,0.1,0,0.2],  // 夏
+  3:[0.3,0.2,0.2,0.1,0.1,0,0.1],  // 秋
+  4:[0.2,0.3,0.1,0,0.1,0.3,0]     // 冬
 }
 
 const HERO_DEFS = [
@@ -2338,11 +2385,20 @@ const app = createApp({
     // ---- 工具函数 ----
     function fmt(n) { return n >= 10000 ? (n/10000).toFixed(1)+'万' : n >= 1000 ? Math.floor(n/1000)+'k' : String(n) }
 
+    // 滚动节流标志
+    let _scrollPending = false
     function addStory(text, type='narrate') {
       if (text === '---') { gs.story.push({ text:'─'.repeat(30), type:'divider' }); return }
       gs.story.push({ text, type })
       if (gs.story.length > 250) gs.story.splice(0, 50)
-      nextTick(() => { if (storyBody.value) storyBody.value.scrollTop = storyBody.value.scrollHeight })
+      // 节流：多次addStory只触发一次scroll
+      if (!_scrollPending) {
+        _scrollPending = true
+        queueMicrotask(() => {
+          _scrollPending = false
+          if (storyBody.value) storyBody.value.scrollTop = storyBody.value.scrollHeight
+        })
+      }
     }
 
     function setOpts(opts) { gs.options = opts }
@@ -2361,10 +2417,13 @@ const app = createApp({
 
     // ---- 成就系统 ----
     function unlockAchieve(id) {
-      if (gs.achievements.includes(id)) return
+      if (gs._achSet && gs._achSet.has(id)) return
       const ach = ACHIEVEMENTS.find(a=>a.id===id)
       if (!ach) return
       gs.achievements.push(id)
+      // 维护加速查找Set
+      if (!gs._achSet) gs._achSet = new Set(gs.achievements)
+      gs._achSet.add(id)
       addStory(`🏆 成就解锁：【${ach.name}】`, 'achieve')
       // 成就 Toast 通知
       achieveToast.name = ach.name
@@ -2500,7 +2559,7 @@ const app = createApp({
     function hasBld(id) { return !!gs.buildings.find(b=>b.id===id) }
     function bldLevel(id) { const b = gs.buildings.find(b=>b.id===id); return b ? b.level : 0 }
     function getBldName(id) { const b = gs.buildings.find(b=>b.id===id); return b ? b.name : '未知' }
-    function getBldNameById(id) { const d = BLD_DEFS.find(b=>b.id===id); return d ? d.name : id }
+    function getBldNameById(id) { const d = BLD_LOOKUP[id]; return d ? d.name : id }
     function getHeroName(id) { const h = gs.heroes.find(h=>h.id===id); return h ? h.name : '未知' }
 
     function isUnlocked(bldDef) {
@@ -2520,7 +2579,7 @@ const app = createApp({
     }
 
     function buildNew(bldId) {
-      const def = BLD_DEFS.find(b=>b.id===bldId)
+      const def = BLD_LOOKUP[bldId]
       if (!def || !isUnlocked(def) || hasBld(bldId)) return
       if (!canBuildNew(def)) { addStory('资源不足，无法建造！', 'warning'); return }
       gs.gold -= def.costGold; gs.wood -= (def.costWood||0); gs.iron -= (def.costIron||0)
@@ -2543,8 +2602,7 @@ const app = createApp({
     function getBldUpgradeCost(bldId) {
       const b = gs.buildings.find(b=>b.id===bldId)
       if (!b || b.level >= 5) return null
-      const def = BLD_DEFS.find(d=>d.id===bldId)
-      if (!def) return null
+      const def = BLD_LOOKUP[bldId]
       const mult = Math.pow(2, b.level)
       return { gold: Math.floor(def.costGold * mult), wood: Math.floor((def.costWood||0)*mult), iron: Math.floor((def.costIron||0)*mult) }
     }
@@ -2552,7 +2610,7 @@ const app = createApp({
     function getBldUpgradeDays(bldId) {
       const b = gs.buildings.find(b=>b.id===bldId)
       if (!b) return 1
-      const def = BLD_DEFS.find(d=>d.id===bldId)
+      const def = BLD_LOOKUP[bldId]
       return Math.max(1, (def?.buildDays||1) + b.level - 1)
     }
 
@@ -2584,7 +2642,7 @@ const app = createApp({
         b.underConstruction = false
         b.constructDays = 0
         // 判断是新建还是升级
-        if (b.level === 1 && b.constructMaxDays === (BLD_DEFS.find(d=>d.id===b.id)?.buildDays||0)) {
+        if (b.level === 1 && b.constructMaxDays === (BLD_LOOKUP[b.id]?.buildDays||0)) {
           addStory(`【${b.name}】建造完成！`, 'reward')
         } else {
           b.level++
@@ -2596,7 +2654,7 @@ const app = createApp({
     }
 
     function getBldEffect(b) {
-      const def = BLD_DEFS.find(d=>d.id===b.id)
+      const def = BLD_LOOKUP[b.id]
       if (!def) return ''
       if (def.outputType === 'food') return `粮食 +${Math.floor(def.baseOutput * b.level)}/日`
       if (def.outputType === 'wood') return `木材 +${Math.floor(def.baseOutput * b.level * 0.5)}/日`
@@ -2850,6 +2908,10 @@ const app = createApp({
       combat.enemyMaxHp = faction.troopCount * 10; combat.enemyHp = faction.troopCount * 10
       combat.allyMorale = 80; combat.enemyMorale = 100
       combat.win = false
+      combat.allyHitAnim = false; combat.enemyHitAnim = false
+      combat.allyCritAnim = false; combat.enemyCritAnim = false
+      combat.allyVictory = false; combat.enemyDefeat = false
+      combat.floatDmg = null
       const initOpts = [
         { text:'发起进攻！', style:'primary', action:doCombatRound },
       ]
@@ -2869,6 +2931,11 @@ const app = createApp({
       if (!combat.active || combat.phase !== 'fighting') return
       const faction = FACTIONS.find(f=>f.id===combat.factionId)
       if (!faction) return
+
+      // 重置动画标记
+      combat.allyHitAnim = false; combat.enemyHitAnim = false
+      combat.allyCritAnim = false; combat.enemyCritAnim = false
+      combat.floatDmg = null
 
       // 获取羁绊战斗加成
       const bondBonus = getBondCombatBonus()
@@ -2896,14 +2963,21 @@ const app = createApp({
       const atkMult = 1 + bondBonus.atkBonus + formationAtkMod + (seasonCombat.combatAtk-1)
       const baseDmg = Math.max(10, Math.floor(myPower.value * 0.4 * techBonus * heroBonus * atkMult * (combat.allyMorale/100)))
       const dmg = baseDmg + Math.floor(Math.random()*baseDmg*0.3 - baseDmg*0.15)
-      combat.enemyHp = Math.max(0, combat.enemyHp - dmg)
+      const isCrit = Math.random() < 0.12
+      const finalDmg = isCrit ? Math.floor(dmg * 1.8) : dmg
+      combat.enemyHp = Math.max(0, combat.enemyHp - finalDmg)
+      // 动画：敌方受击，我方浮动数字
+      combat.enemyHitAnim = true
+      combat.enemyCritAnim = isCrit
+      combat.floatDmg = { type: isCrit?'crit':'dmg', text: isCrit?`💥${finalDmg}!`:`-${finalDmg}`, side:'enemy' }
+      setTimeout(()=>{ combat.enemyHitAnim=false; combat.enemyCritAnim=false; combat.floatDmg=null }, isCrit?500:300)
 
       // 武将技能触发（正常30%，羁绊保障100%）
       const randomHero = gs.heroes[Math.floor(Math.random()*gs.heroes.length)]
       const skillTriggerChance = bondBonus.guaranteeSkill ? 1.0 : 0.3
       if (randomHero && Math.random() < skillTriggerChance) {
         addStory(`✨ ${randomHero.name}发动【${randomHero.skill}】：${randomHero.skillDesc}！`, 'reward')
-        combat.enemyHp = Math.max(0, combat.enemyHp - Math.floor(dmg * 0.3))
+        combat.enemyHp = Math.max(0, combat.enemyHp - Math.floor(finalDmg * 0.3))
       }
 
       // 羁绊额外效果
@@ -2918,13 +2992,17 @@ const app = createApp({
         const enemyAtk = faction.powerReq * 0.25 * weatherDebuff * (combat.enemyMorale/100) / defMult
         const enemyDmg = Math.max(5, Math.floor(enemyAtk + Math.random()*20 - 10))
         combat.allyHp = Math.max(0, combat.allyHp - enemyDmg)
+        // 动画：我方受击
+        combat.allyHitAnim = true
+        combat.floatDmg = { type:'dmg', text: `-${enemyDmg}`, side:'ally' }
+        setTimeout(()=>{ combat.allyHitAnim=false; combat.floatDmg=null }, 300)
         if (!bondBonus.moraleImmune) {
           combat.enemyMorale = Math.max(30, combat.enemyMorale - 5)
           combat.allyMorale = Math.max(30, combat.allyMorale - 2)
         }
         const ln = faction.combatLines[Math.min(combat.round, faction.combatLines.length-1)]
         if (combat.round <= faction.combatLines.length) addStory(`${faction.leader}：${ln.split('：')[1]||ln}`, 'npc')
-        addStory(`第${combat.round}回合 | 我军攻击 ${dmg} | 敌军反击 ${enemyDmg} | 敌HP：${combat.enemyHp}/${combat.enemyMaxHp}`, 'system')
+        addStory(`第${combat.round}回合 | 我军攻击 ${finalDmg}${isCrit?' 💥暴击！':''} | 敌军反击 ${enemyDmg} | 敌HP：${combat.enemyHp}/${combat.enemyMaxHp}`, 'system')
       }
 
       combat.round++
@@ -2932,7 +3010,9 @@ const app = createApp({
       // 判断结果
       if (combat.enemyHp <= 0) {
         combat.phase = 'result'; combat.win = true
-        // 检查HP成就
+        combat.allyVictory = true
+        combat.enemyDefeat = true
+        addStory('⚡ 敌军全军覆没！', 'achieve')
         const hpPct = combat.allyHp / combat.allyMaxHp
         resolveCombatVictory(faction, hpPct)
       } else if (combat.allyHp <= 0) {
@@ -3317,7 +3397,8 @@ const app = createApp({
       }
 
       // 天气
-      const wProp = gs.season===4 ? [0.2,0.3,0.1,0,0.1,0.3,0] : gs.season===3 ? [0.3,0.2,0.2,0.1,0.1,0,0.1] : gs.season===2 ? [0.4,0.1,0.2,0.1,0.1,0,0.2] : [0.3,0.2,0.3,0.1,0.1,0,0]
+      // 天气 - 使用预缓存概率表
+      const wProp = WEATHER_PROPS[gs.season]
       let r = Math.random(); let wi = 0
       for (let i=0; i<wProp.length; i++) { r -= wProp[i]; if (r<=0) { wi=i; break; } }
       gs.weather = wi
@@ -3339,7 +3420,7 @@ const app = createApp({
       const shopMod = 1 + adjBonus.shop_income // 商铺加成
       for (const b of gs.buildings) {
         if (b.underConstruction) continue
-        const def = BLD_DEFS.find(d=>d.id===b.id)
+        const def = BLD_LOOKUP[b.id]
         if (!def) continue
         const heroBoost = getHeroBoost(b)
         const base = Math.floor((def.baseOutput||0) * b.level * (1+heroBoost) * bondProdBonus * buffProdMod)
@@ -3405,7 +3486,7 @@ const app = createApp({
       if (!bld.assignedHero) return 0
       const h = gs.heroes.find(h=>h.id===bld.assignedHero)
       if (!h) return 0
-      const def = BLD_DEFS.find(d=>d.id===bld.id)
+      const def = BLD_LOOKUP[bld.id]
       if (!def) return 0
       if (def.outputType==='food') return Math.floor(h.pol/10) * 0.05
       if (def.outputType==='wood'||def.outputType==='iron') return Math.floor((h.atk+h.pol)/15) * 0.05
@@ -3949,6 +4030,7 @@ const app = createApp({
           infBuffDays:d.infBuffDays||0,
           woodSaveBonus:d.woodSaveBonus||0,
           totalTechExp:d.totalTechExp||0,
+          _achSet: new Set(d.achievements||[]),
         })
         gs.started = true
         addStory('📂 读档成功！聚义事业继续…', 'reward')
@@ -3971,7 +4053,7 @@ const app = createApp({
         buildings:[], heroes:[], troops:{infantry:10,archers:0,musketeers:0,cavalry:0},
         tech:{}, defeatedFactions:[], exploredLocations:['taiyuan'],
         location:'太原', actionPoints:10, story:[], options:[],
-        achievements:[],
+        achievements:[], _achSet: new Set(),
         totalExploreCount:0, totalTravelPoints:0, festivalsExperienced:[],
         storyProgress:[], advancedTroops:{}, ritualCooldown:0,
         minigameCooldowns:{}, activeBuffs:[],         activeFormation:'square',
@@ -4392,38 +4474,86 @@ const app = createApp({
     }
 
     // ---- 新游戏+ ----
+    // 结局差异化继承表
+    const NGPLUS_INHERIT = {
+      dynasty:  { gold:0.15, prestige:0.20, heroes:4, heroLoyalty:60, techThreshold:2, desc:'新朝余威，万民归附' },
+      lingyan:  { gold:0.12, prestige:0.25, heroes:5, heroLoyalty:70, techThreshold:2, desc:'凌烟阁功绩铭刻史册' },
+      retire:   { gold:0.20, prestige:0.10, heroes:3, heroLoyalty:80, techThreshold:3, desc:'功成身退，携丰厚家财归隐' },
+      hermit:   { gold:0.05, prestige:0.05, heroes:2, heroLoyalty:90, techThreshold:3, desc:'归隐山林，仅携最忠心的随从' },
+      warlord:  { gold:0.10, prestige:0.08, heroes:4, heroLoyalty:55, techThreshold:2, desc:'割据一方，势力盘根错节' },
+      death:    { gold:0.03, prestige:0.0, heroes:0, heroLoyalty:0, techThreshold:2, desc:'战死沙场，魂归故土，仅留遗物' },
+      default:  { gold:0.10, prestige:0.15, heroes:3, heroLoyalty:50, techThreshold:3, desc:'前世记忆隐约浮现' },
+    }
+    const NGPLUS_UNLOCKS = {
+      2: { name:'隐藏建筑·演武场', desc:'第二周目解锁：演武场（训练加速15%）', bld:'training_ground' },
+      3: { name:'隐藏武将·李靖', desc:'第三周目解锁：李靖（SSS级，军神）', hero:'liJing' },
+      4: { name:'隐藏兵种·玄甲军', desc:'第四周目解锁：玄甲军自动获得', troop:'xuanjia' },
+      5: { name:'传奇坐骑·赤兔', desc:'第五周目解锁：赤兔马', mount:'red_hare' },
+    }
+
     function startNgPlus() {
-      const carryGold = Math.floor(gs.gold * 0.1)
-      const carryPrestige = Math.floor(gs.prestige * 0.15)
-      const carryHeroes = gs.heroes.filter(h=>h.loyalty>=80).slice(0, 3)
+      const ending = gs.chosenEnding || 'default'
+      const inh = NGPLUS_INHERIT[ending] || NGPLUS_INHERIT['default']
+      const ngLvl = (gs.ngPlus||0) + 1
+      const carryGold = Math.floor(gs.gold * inh.gold)
+      const carryPrestige = Math.floor(gs.prestige * inh.prestige)
+      const carryHeroes = gs.heroes
+        .filter(h=>h.loyalty>=50)
+        .sort((a,b)=>(b.loyalty||0)-(a.loyalty||0))
+        .slice(0, inh.heroes)
       const carryTech = {}
       for (const k of Object.keys(gs.tech)) {
-        if (gs.tech[k]>=3) carryTech[k] = Math.min(gs.tech[k]-1, 1)
+        if (gs.tech[k]>=inh.techThreshold) carryTech[k] = Math.min(gs.tech[k]-1, inh.techThreshold-1)
       }
-      const ngLvl = (gs.ngPlus||0) + 1
-      const diffBonus = 1 + ngLvl * 0.15
+      const carryEquip = (gs.equipment||[]).slice(0, 3)
+      const carryMounts = (gs.mounts||[]).slice(0, 1)
+      const diffBonus = 1 + ngLvl * 0.2
+
       Object.assign(gs, {
         started:true, difficulty:'ngplus', ngPlus: ngLvl,
-        gold: carryGold + 300, food:300, wood:150, iron:30,
-        prestige: carryPrestige + 20, population:15, loyalty:60,
+        gold: carryGold + 300, food: Math.floor(300*(1+ngLvl*0.1)),
+        wood:150, iron:30, prestige: carryPrestige + 15,
+        population:15, loyalty: Math.min(60, 50 + inh.heroLoyalty/5),
         year:1, season:1, dayInSeason:1, weather:0,
-        buildings:[], heroes: carryHeroes.map(h=>({...h, loyalty:50, affection:20, level:Math.max(1,h.level-2), equipment:h.equipment||{}})),
-        troops:{infantry:8,archers:0,musketeers:0,cavalry:0},
+        buildings:[], heroes: carryHeroes.map(h=>({...h,
+          loyalty: Math.min(50, inh.heroLoyalty),
+          affection: Math.min(20, inh.heroLoyalty/2),
+          level: Math.max(1, Math.floor(h.level * 0.6)),
+          equipment: h.equipment||{}
+        })),
+        troops:{infantry:8+ngLvl*2,archers:0,musketeers:0,cavalry:0},
         tech: carryTech, defeatedFactions:[], exploredLocations:['taiyuan'],
-        location:'太原', actionPoints:10, story:[], options:[],
-        achievements:[], totalExploreCount:0, totalTravelPoints:0,
+        location:'太原', actionPoints:10+ngLvl, story:[], options:[],
+        achievements:[], _achSet: new Set(),
+        totalExploreCount:0, totalTravelPoints:0,
         festivalsExperienced:[], storyProgress:[], advancedTroops:{},
         ritualCooldown:0, minigameCooldowns:{}, activeBuffs:[],
-        activeFormation:'square', equipment:gs.equipment||[], caravanCooldown:0,
+        activeFormation:'square', equipment: carryEquip,
+        mounts: carryMounts, caravanCooldown:0,
+        locationExplores:{}, permanentSaltIncome:0, saltIncomeDays:0,
+        tradeRoutes:0, tradePosts:0, intelLevel:0, qiangAlly:false,
+        skillBooks:0, treasures:0, legendTreasures:0,
       })
-      // 调整势力战力
+      // 调整势力战力（永久修改需注意）
+      const origPower = FACTIONS.map(f=>({id:f.id,pr:f.powerReq,tc:f.troopCount}))
       FACTIONS.forEach(f=>{ f.powerReq = Math.floor(f.powerReq * diffBonus); f.troopCount = Math.floor(f.troopCount * diffBonus) })
+      gs._ngOrigFaction = origPower
+
       addStory('═'.repeat(32))
-      addStory(`🌟 新游戏+ · 第${ngLvl}周目 🌟`, 'achieve')
+      addStory(`🌟 新游戏+ · 第${ngLvl}周目 | ${ending==='death'?'魂归':'传承'}：${inh.desc}`, 'achieve')
       addStory('前世的记忆碎片在你脑海中浮现…', 'narrate')
-      addStory(`继承：金${carryGold} 威望${carryPrestige} 武将${carryHeroes.length}人 | 敌人增强${Math.floor((diffBonus-1)*100)}%`, 'system')
+      addStory(`继承：金${carryGold} 威望${carryPrestige} 武将${carryHeroes.length}人 装备${carryEquip.length}件 坐骑${carryMounts.length}匹 | 敌人增强${Math.floor((diffBonus-1)*100)}%`, 'system')
+      // 显示继承武将
+      if (carryHeroes.length > 0) {
+        addStory(`追随武将：${carryHeroes.map(h=>h.name).join('、')}`, 'system')
+      }
+      // 周目解锁提示
+      const unlock = NGPLUS_UNLOCKS[ngLvl]
+      if (unlock) {
+        addStory(`🔓 第${ngLvl}周目解锁：${unlock.name}！${unlock.desc}`, 'reward')
+      }
       addStory('═'.repeat(32))
-      setOpts([{ text:'踏上新征途', style:'primary', action:()=>{ addStory('命运之轮再次转动…', 'narrate') }}])
+      setOpts([{ text:'踏上新征途', style:'primary', action:()=>{ addStory('命运之轮再次转动，这一次，你将改写历史！', 'narrate') }}])
     }
 
     function hasNgPlusSave() {
@@ -4439,6 +4569,8 @@ const app = createApp({
         tech:gs.tech, ngPlus:(gs.ngPlus||0)+1,
         achievements:gs.achievements,
         equipment:gs.equipment||[],
+        mounts:gs.mounts||[],
+        chosenEnding:gs.chosenEnding||'default',
       }
       localStorage.setItem('stjyc_ngplus', JSON.stringify(data))
     }
